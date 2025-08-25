@@ -42,7 +42,7 @@
 
 1. **克隆项目**
    ```bash
-   git clone https://github.com/your-username/yeguo-downloader.git
+   git clone https://github.com/gitchzh/Yeguo-Downloader.git
    cd yeguo-downloader
    ```
 
