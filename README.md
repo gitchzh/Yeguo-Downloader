@@ -54,9 +54,14 @@
 
 1. **克隆项目**
    ```bash
-   git clone https://github.com/your-username/ygmdm.git
-   cd ygmdm
-   ```
+# 从Gitee克隆（推荐国内用户）
+git clone https://gitee.com/mrchzh/ygmdm.git
+cd ygmdm
+
+# 或从GitHub克隆
+git clone git@github.com:gitchzh/Yeguo-IDM.git
+cd Yeguo-IDM
+```
 
 2. **安装依赖**
    ```bash
@@ -160,11 +165,15 @@
 
 ### 贡献指南
 
-1. Fork 项目到你的GitHub账户
+1. Fork 项目到你的GitHub账户或Gitee账户
 2. 创建功能分支: `git checkout -b feature/AmazingFeature`
 3. 提交更改: `git commit -m 'Add some AmazingFeature'`
 4. 推送到分支: `git push origin feature/AmazingFeature`
 5. 创建 Pull Request
+
+**代码仓库地址:**
+- **Gitee**: https://gitee.com/mrchzh/ygmdm.git
+- **GitHub**: git@github.com:gitchzh/Yeguo-IDM.git
 
 ### 代码规范
 
@@ -196,9 +205,10 @@ A: 查看日志文件，重启程序，如问题持续请提交详细的错误�
 
 ### 提交反馈
 
-- **GitHub Issues**: [提交问题报告](https://github.com/your-username/ygmdm/issues)
-- **功能建议**: [功能请求](https://github.com/your-username/ygmdm/issues/new?template=feature_request.md)
-- **Bug报告**: [Bug报告](https://github.com/your-username/ygmdm/issues/new?template=bug_report.md)
+- **Gitee Issues**: [提交问题报告](https://gitee.com/mrchzh/ygmdm/issues)
+- **GitHub Issues**: [提交问题报告](https://github.com/gitchzh/Yeguo-IDM/issues)
+- **功能建议**: [Gitee功能请求](https://gitee.com/mrchzh/ygmdm/issues/new?template=feature_request.md) | [GitHub功能请求](https://github.com/gitchzh/Yeguo-IDM/issues/new?template=feature_request.md)
+- **Bug报告**: [Gitee Bug报告](https://gitee.com/mrchzh/ygmdm/issues/new?template=bug_report.md) | [GitHub Bug报告](https://github.com/gitchzh/Yeguo-IDM/issues/new?template=bug_report.md)
 
 ## 📈 更新日志
 
@@ -224,10 +234,16 @@ A: 查看日志文件，重启程序，如问题持续请提交详细的错误�
 
 ## 📞 联系我们
 
-- **项目主页**: [GitHub Repository](https://github.com/your-username/ygmdm)
-- **问题反馈**: [GitHub Issues](https://github.com/your-username/ygmdm/issues)
-- **讨论交流**: [GitHub Discussions](https://github.com/your-username/ygmdm/discussions)
-- **邮箱联系**: your-email@example.com
+- **项目主页**: 
+  - [Gitee Repository](https://gitee.com/mrchzh/ygmdm)
+  - [GitHub Repository](https://github.com/gitchzh/Yeguo-IDM)
+- **问题反馈**: 
+  - [Gitee Issues](https://gitee.com/mrchzh/ygmdm/issues)
+  - [GitHub Issues](https://github.com/gitchzh/Yeguo-IDM/issues)
+- **讨论交流**: 
+  - [Gitee Discussions](https://gitee.com/mrchzh/ygmdm/pulls)
+  - [GitHub Discussions](https://github.com/gitchzh/Yeguo-IDM/discussions)
+- **邮箱联系**: gmrchzh@gmail.com
 
 ---
 
@@ -235,6 +251,6 @@ A: 查看日志文件，重启程序，如问题持续请提交详细的错误�
 
 **🥥 椰果IDM - 让视频下载更简单、更高效**
 
-[⭐ Star](https://github.com/your-username/ygmdm) | [📖 文档](https://github.com/your-username/ygmdm/wiki) | [🚀 下载](https://github.com/your-username/ygmdm/releases)
+[⭐ Gitee Star](https://gitee.com/mrchzh/ygmdm) | [⭐ GitHub Star](https://github.com/gitchzh/Yeguo-IDM) | [📖 文档](https://gitee.com/mrchzh/ygmdm) | [🚀 下载](https://gitee.com/mrchzh/ygmdm/releases)
 
 </div>

@@ -2806,6 +2806,19 @@ class VideoDownloaderMethods:
             <div style="text-align: center; margin-top: 30px; padding: 15px; background: #e8f5e8; border-radius: 8px;">
                 <p style="margin: 0; color: #2e7d32; font-weight: bold;">🎉 现在开始您的下载之旅吧！</p>
             </div>
+            
+            <h3 style="color: #495057; margin-top: 25px; margin-bottom: 15px;">🌐 项目信息</h3>
+            <div style="background: #e1f5fe; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <p style="margin: 0; color: #495057;">
+                    <strong>项目地址：</strong><br>
+                    • <a href="https://gitee.com/mrchzh/ygmdm" style="color: #007bff; text-decoration: none;">Gitee（国内推荐）</a><br>
+                    • <a href="https://github.com/gitchzh/Yeguo-IDM" style="color: #007bff; text-decoration: none;">GitHub</a><br><br>
+                    <strong>问题反馈：</strong><br>
+                    • <a href="https://gitee.com/mrchzh/ygmdm/issues" style="color: #007bff; text-decoration: none;">Gitee Issues</a><br>
+                    • <a href="https://github.com/gitchzh/Yeguo-IDM/issues" style="color: #007bff; text-decoration: none;">GitHub Issues</a><br><br>
+                    <strong>联系邮箱：</strong> <a href="mailto:gmrchzh@gmail.com" style="color: #007bff; text-decoration: none;">gmrchzh@gmail.com</a>
+                </p>
+            </div>
         </div>
         """
         
@@ -3000,6 +3013,15 @@ class VideoDownloaderMethods:
                     <li>网易云音乐解析过程中可随时暂停、恢复或取消</li>
                 </ul>
             </div>
+            
+            <div style="background: #e1f5fe; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                <h4 style="margin: 0 0 10px 0; color: #0277bd;">🌐 项目信息</h4>
+                <p style="margin: 0; color: #495057; font-size: 12px;">
+                    <strong>项目地址：</strong> <a href="https://gitee.com/mrchzh/ygmdm" style="color: #007bff; text-decoration: none;">Gitee</a> | <a href="https://github.com/gitchzh/Yeguo-IDM" style="color: #007bff; text-decoration: none;">GitHub</a><br>
+                    <strong>问题反馈：</strong> <a href="https://gitee.com/mrchzh/ygmdm/issues" style="color: #007bff; text-decoration: none;">Gitee Issues</a> | <a href="https://github.com/gitchzh/Yeguo-IDM/issues" style="color: #007bff; text-decoration: none;">GitHub Issues</a><br>
+                    <strong>联系邮箱：</strong> <a href="mailto:gmrchzh@gmail.com" style="color: #007bff; text-decoration: none;">gmrchzh@gmail.com</a>
+                </p>
+            </div>
         </div>
         """
         
@@ -3157,8 +3179,9 @@ class VideoDownloaderMethods:
                 <h3 style="margin: 0 0 10px 0; color: #f57c00;">👨‍💻 开发者信息</h3>
                 <p style="margin: 0; color: #495057;">
                     <strong>作者：</strong>mrchzh<br>
-                    <strong>邮箱：</strong>gmrchzh@gmail.com<br>
-                    <strong>创建日期：</strong>2025年8月25日
+                    <strong>邮箱：</strong><a href="mailto:gmrchzh@gmail.com" style="color: #007bff; text-decoration: none;">gmrchzh@gmail.com</a><br>
+                    <strong>创建日期：</strong>2025年8月25日<br>
+                    <strong>最后更新：</strong>2025年9月2日
                 </p>
             </div>
             
@@ -3167,6 +3190,27 @@ class VideoDownloaderMethods:
                 <p style="margin: 0; color: #495057;">
                     本项目采用 <strong>MIT 许可证</strong><br>
                     基于开源项目构建，感谢所有贡献者
+                </p>
+            </div>
+            
+            <div style="background: #e1f5fe; padding: 15px; border-radius: 8px; margin-bottom: 25px;">
+                <h3 style="margin: 0 0 10px 0; color: #0277bd;">🌐 项目地址</h3>
+                <p style="margin: 0; color: #495057;">
+                    <strong>Gitee（国内推荐）：</strong><br>
+                    <a href="https://gitee.com/mrchzh/ygmdm" style="color: #007bff; text-decoration: none;">https://gitee.com/mrchzh/ygmdm</a><br><br>
+                    <strong>GitHub：</strong><br>
+                    <a href="https://github.com/gitchzh/Yeguo-IDM" style="color: #007bff; text-decoration: none;">https://github.com/gitchzh/Yeguo-IDM</a>
+                </p>
+            </div>
+            
+            <div style="background: #f1f8e9; padding: 15px; border-radius: 8px; margin-bottom: 25px;">
+                <h3 style="margin: 0 0 10px 0; color: #33691e;">📞 联系我们</h3>
+                <p style="margin: 0; color: #495057;">
+                    <strong>问题反馈：</strong><br>
+                    • <a href="https://gitee.com/mrchzh/ygmdm/issues" style="color: #007bff; text-decoration: none;">Gitee Issues</a><br>
+                    • <a href="https://github.com/gitchzh/Yeguo-IDM/issues" style="color: #007bff; text-decoration: none;">GitHub Issues</a><br><br>
+                    <strong>邮箱联系：</strong><br>
+                    <a href="mailto:gmrchzh@gmail.com" style="color: #007bff; text-decoration: none;">gmrchzh@gmail.com</a>
                 </p>
             </div>
             
