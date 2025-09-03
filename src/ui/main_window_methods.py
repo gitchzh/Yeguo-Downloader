@@ -31,6 +31,8 @@ from PyQt5.QtCore import Qt, QUrl, QPoint, QTimer
 from PyQt5.QtGui import QCloseEvent, QDesktopServices, QPixmap
 
 from ..core.config import Config
+from ..core.magnet_manager import magnet_manager
+from ..core.ed2k_manager import ed2k_manager
 from ..core.queue_manager import queue_manager, DownloadStatus
 from ..core.history import history_manager, DownloadRecord
 from ..core.playlist_manager import playlist_manager
@@ -45,6 +47,8 @@ from ..workers.parse_worker import ParseWorker
 from ..workers.download_worker import DownloadWorker
 
 from ..workers.netease_music_worker import NetEaseMusicParseWorker
+from ..workers.magnet_download_worker import MagnetDownloadWorker
+from ..workers.ed2k_download_worker import ED2KDownloadWorker
 
 
 
@@ -203,11 +207,26 @@ class VideoDownloaderMethods:
 
     def validate_url(self, url: str) -> bool:
         """验证 URL 是否有效"""
-
         
         # 检查是否为网易云音乐链接
         if NetEaseMusicManager().is_netease_music_url(url):
             return True
+        
+        # 检查是否为磁力链接
+        try:
+            from ..core.magnet_manager import magnet_manager
+            if magnet_manager.is_magnet_link(url):
+                return True
+        except ImportError:
+            pass
+        
+        # 检查是否为ED2K链接
+        try:
+            from ..core.ed2k_manager import ed2k_manager
+            if ed2k_manager.is_ed2k_link(url):
+                return True
+        except ImportError:
+            pass
         
         # 检查是否为标准HTTP/HTTPS链接
         return bool(re.match(r"^https?://.*", url))
@@ -1075,6 +1094,42 @@ class VideoDownloaderMethods:
         filtered_formats = filter_formats(formats, strict_filter=False)
         logger.info(f"过滤后剩余 {len(filtered_formats)} 个格式")
 
+        # 检查是否为ED2K或磁力链接类型
+        link_type = info.get('type', '')
+        if link_type in ['ed2k', 'magnet']:
+            # 对于ED2K和磁力链接，直接处理格式，不进行视频特定的过滤
+            logger.info(f"检测到{link_type.upper()}链接，跳过视频格式过滤")
+
+            for f in filtered_formats:
+                format_id = f.get("format_id")
+                ext = f.get("ext", "")
+                filesize = f.get("filesize") or f.get("filesize_approx")
+
+                # 调试信息：记录每个格式的详细信息
+                logger.info(f"格式 {format_id}: ext={ext}, filesize={filesize}, format_note={f.get('format_note')}")
+
+                # 直接添加到格式列表，不进行视频特定的过滤
+                self.formats.append({
+                    "video_id": video_id,
+                    "format_id": format_id,
+                    "description": f"{video_title}.{ext}",
+                    "type": link_type,
+                    "ext": ext,
+                    "filesize": filesize if filesize else 0,
+                    "url": info.get("webpage_url", ""),
+                    "item": None  # 稍后设置
+                })
+
+                logger.info(f"添加{link_type.upper()}格式: {format_id} -> {video_title}.{ext}")
+
+            # 直接添加到树形控件
+            if self.formats:
+                self.add_formats_to_tree()
+                self.smart_select_button.setEnabled(True)
+                self.update_selection_count()
+
+            return
+
         # 处理格式信息
         for f in filtered_formats:
             format_id = f.get("format_id")
@@ -1716,6 +1771,16 @@ class VideoDownloaderMethods:
     def start_download(self, url: str, selected_format: Dict) -> None:
         """启动下载任务"""
         try:
+            # 检查是否为磁力链接
+            if selected_format.get("type") == "magnet":
+                self._start_magnet_download(url, selected_format)
+                return
+            
+            # 检查是否为ED2K链接
+            if selected_format.get("type") == "ed2k":
+                self._start_ed2k_download(url, selected_format)
+                return
+            
             # 检查是否为网易云音乐
             if selected_format.get("type") == "netease_music":
                 self._start_netease_music_download(url, selected_format)
@@ -1730,6 +1795,7 @@ class VideoDownloaderMethods:
                 "outtmpl": os.path.join(self.save_path, selected_format["description"]),
                 "quiet": False,
                 "ffmpeg_location": self.ffmpeg_path,
+                "verbose": True,  # 启用详细日志以诊断FFmpeg问题
                 
                 # 增强下载稳定性配置
                 "retries": 10,  # 增加重试次数
@@ -1751,6 +1817,9 @@ class VideoDownloaderMethods:
                 "prefer_insecure": True,  # 优先使用不安全的连接
                 "no_check_certificate": True,  # 不检查证书
                 
+                # 允许FFmpeg进行音视频合并
+                "merge_output_format": "mp4",  # 指定合并格式为mp4
+                
                 # 请求头配置
                 "headers": {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -1771,6 +1840,7 @@ class VideoDownloaderMethods:
             
             # 如果有特定的格式ID，使用它；否则使用best
             if format_id and format_id != "unknown":
+                # 允许使用合并格式，让FFmpeg包装器处理合并
                 format_spec = format_id
                 logger.info(f"使用特定格式ID: {format_spec} (高度: {height})")
             else:
@@ -1787,9 +1857,14 @@ class VideoDownloaderMethods:
                     format_spec = "best"
                 logger.info(f"使用高度匹配格式: {format_spec} (高度: {height})")
             
+            # 记录最终的下载配置
+            logger.info(f"最终下载配置: format={format_spec}, ffmpeg_location={self.ffmpeg_path}")
+            logger.info(f"FFmpeg禁用配置: postprocessors={ydl_opts.get('postprocessors')}, merge_output_format={ydl_opts.get('merge_output_format')}")
+            
             ydl_opts.update({
                 "format": format_spec,
-                "merge_output_format": "mp4",
+                # 不指定合并格式，避免FFmpeg检查
+                # "merge_output_format": "mp4",
             })
 
             worker = DownloadWorker(url, ydl_opts, format_id)
@@ -1848,6 +1923,9 @@ class VideoDownloaderMethods:
                 "prefer_insecure": True,
                 "no_check_certificate": True,
                 "nocheckcertificate": True,
+                
+                # 允许FFmpeg进行音视频合并
+                "merge_output_format": "mp4",  # 指定合并格式为mp4
                 
                 # 地理绕过
                 "geo_bypass": True,
@@ -2064,6 +2142,10 @@ class VideoDownloaderMethods:
             return 'bilibili'
         elif 'music.163.com' in url:
             return 'netease_music'
+        elif magnet_manager.is_magnet_link(url):
+            return 'magnet'
+        elif ed2k_manager.is_ed2k_link(url):
+            return 'ed2k'
         else:
             return 'unknown'
 
@@ -3539,6 +3621,406 @@ class VideoDownloaderMethods:
         except Exception as e:
             logger.error(f"检查磁盘空间失败: {str(e)}")
             return False
+
+    def add_formats_to_tree(self) -> None:
+        """将格式列表添加到树形控件中显示"""
+        if not self.formats:
+            logger.warning("没有可用的格式添加到树形控件")
+            return
+            
+        logger.info(f"开始添加 {len(self.formats)} 个格式到树形控件")
+        
+        # 清空现有内容
+        self.format_tree.clear()
+        
+        # 按类型分组
+        type_groups = {}
+        for fmt in self.formats:
+            fmt_type = fmt.get("type", "unknown")
+            if fmt_type not in type_groups:
+                type_groups[fmt_type] = []
+            type_groups[fmt_type].append(fmt)
+        
+        # 为每种类型创建分组
+        for fmt_type, formats in type_groups.items():
+            # 创建类型分组节点
+            type_group = QTreeWidgetItem(self.format_tree)
+            type_group.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+            type_group.setCheckState(0, Qt.Unchecked)
+            
+            # 设置类型名称和图标
+            if fmt_type == "ed2k":
+                type_group.setText(0, "ED2K 链接")
+                type_group.setIcon(0, self.style().standardIcon(self.style().SP_DriveNetIcon))
+            elif fmt_type == "magnet":
+                type_group.setText(0, "磁力链接")
+                type_group.setIcon(0, self.style().standardIcon(self.style().SP_DriveNetIcon))
+            else:
+                type_group.setText(0, f"{fmt_type.upper()} 格式")
+                type_group.setIcon(0, self.style().standardIcon(self.style().SP_DirIcon))
+            
+            type_group.setExpanded(True)
+            
+            # 为每个格式创建子项
+            for fmt in formats:
+                # 创建格式项
+                format_item = QTreeWidgetItem(type_group)
+                format_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+                format_item.setCheckState(0, Qt.Unchecked)
+                
+                # 设置图标
+                if fmt_type == "ed2k":
+                    format_item.setIcon(0, self.style().standardIcon(self.style().SP_FileIcon))
+                elif fmt_type == "magnet":
+                    format_item.setIcon(0, self.style().standardIcon(self.style().SP_FileIcon))
+                else:
+                    format_item.setIcon(0, self.style().standardIcon(self.style().SP_MediaPlay))
+                
+                # 设置文本内容
+                description = fmt.get("description", "未知格式")
+                ext = fmt.get("ext", "")
+                filesize = fmt.get("filesize", 0)
+                
+                format_item.setText(1, description)  # 文件名
+                format_item.setText(2, ext)  # 文件类型
+                format_item.setText(3, format_size(filesize))  # 文件大小
+                format_item.setText(4, "未下载")  # 状态
+                format_item.setForeground(4, Qt.black)
+                
+                # 将树形控件项保存到格式信息中
+                fmt["item"] = format_item
+                
+                logger.info(f"添加格式项到树形控件: {description} ({ext}, {format_size(filesize)})")
+        
+        logger.info(f"成功添加 {len(self.formats)} 个格式到树形控件")
+        self.format_tree.update()
+
+    def _start_magnet_download(self, url: str, selected_format: Dict) -> None:
+        """启动磁力链接下载"""
+        try:
+            # 检查磁力下载是否启用
+            if not Config.MAGNET_DOWNLOAD_ENABLED:
+                QMessageBox.warning(self, "功能未启用", "磁力下载功能未启用，请在设置中启用")
+                return
+            
+            # 生成文件名
+            display_name = selected_format.get("display_name", "磁力链接")
+            info_hash = selected_format.get("info_hash", "")
+            filename = f"{display_name}_{info_hash[:8]}.torrent"
+            output_file = os.path.join(self.save_path, filename)
+            
+            self.download_progress[output_file] = (0, "磁力下载中...")
+            logger.info(f"开始磁力下载: {filename}")
+            
+            # 创建磁力下载工作器
+            worker = MagnetDownloadWorker(url, self.save_path, selected_format)
+            worker.progress_signal.connect(self.magnet_download_progress_hook)
+            worker.status_signal.connect(self.update_scroll_status)
+            worker.log_signal.connect(self.update_scroll_status)
+            worker.finished.connect(lambda filepath: self.on_magnet_download_finished(filepath, url, selected_format))
+            worker.error.connect(self.on_magnet_download_error)
+            worker.start()
+            
+            # 添加到工作器列表
+            self.download_workers.append(worker)
+            self.active_downloads += 1
+            
+            self.update_status_bar(f"磁力下载已启动: {display_name}", "", "")
+            
+        except Exception as e:
+            logger.error(f"启动磁力下载失败: {str(e)}", exc_info=True)
+            self.update_status_bar(f"磁力下载失败: {str(e)}", "", "")
+            self.reset_download_state()
+
+    def _start_ed2k_download(self, url: str, selected_format: Dict) -> None:
+        """启动ED2K链接下载"""
+        try:
+            # 检查ED2K下载是否启用
+            if not Config.ED2K_DOWNLOAD_ENABLED:
+                QMessageBox.warning(self, "功能未启用", "ED2K下载功能未启用，请在设置中启用")
+                return
+            
+            # 生成文件名
+            file_name = selected_format.get("file_name", "ED2K文件")
+            file_hash = selected_format.get("file_hash", "")
+            filename = f"{file_name}_{file_hash[:8]}.ed2k"
+            output_file = os.path.join(self.save_path, filename)
+            
+            self.download_progress[output_file] = (0, "ED2K下载中...")
+            logger.info(f"开始ED2K下载: {filename}")
+            
+            # 创建ED2K下载工作器
+            worker = ED2KDownloadWorker(url, self.save_path, selected_format)
+            worker.progress_updated.connect(self.ed2k_download_progress_hook)
+            worker.status_updated.connect(self.update_scroll_status)
+            worker.download_finished.connect(lambda filename, filepath: self.on_ed2k_download_finished(filepath, url, selected_format))
+            worker.download_error.connect(self.on_ed2k_download_error)
+            worker.start()
+            
+            # 添加到工作器列表
+            self.download_workers.append(worker)
+            self.active_downloads += 1
+            
+            self.update_status_bar(f"ED2K下载已启动: {file_name}", "", "")
+            
+        except Exception as e:
+            logger.error(f"启动ED2K下载失败: {str(e)}", exc_info=True)
+            self.update_status_bar(f"ED2K下载失败: {str(e)}", "", "")
+            self.reset_download_state()
+
+    def magnet_download_progress_hook(self, d: Dict) -> None:
+        """磁力下载进度回调"""
+        try:
+            if isinstance(d, dict) and d.get("status") == "downloading":
+                # 构建文件名（磁力下载可能没有具体的文件名）
+                info_hash = d.get("info_hash", "unknown")
+                filename = f"磁力链接_{info_hash[:8]}.torrent"
+                
+                # 获取进度信息
+                progress = d.get("progress", 0.0)
+                download_rate = d.get("download_rate", 0)
+                num_peers = d.get("num_peers", 0)
+                num_seeds = d.get("num_seeds", 0)
+                
+                # 格式化速度显示
+                if download_rate > 0:
+                    speed = f"{format_size(download_rate)}/s"
+                else:
+                    speed = "等待连接..."
+                
+                # 更新进度
+                self.download_progress[filename] = (progress, speed)
+                
+                # 更新状态栏显示连接信息
+                status_text = f"磁力下载中... 连接: {num_peers} 种子: {num_seeds}"
+                self.update_status_bar(status_text, f"{progress:.1f}%", speed)
+                
+            elif isinstance(d, dict) and d.get("status") == "finished":
+                filename = d.get("filename", "磁力下载完成")
+                self.download_progress[filename] = (100, "已完成")
+                logger.info(f"磁力下载完成: {filename}")
+                
+        except Exception as e:
+            logger.error(f"磁力下载进度回调处理错误: {e}")
+
+    def ed2k_download_progress_hook(self, filename: str, progress: int, speed: str, status: str, sources: int) -> None:
+        """ED2K下载进度回调"""
+        try:
+            # 更新进度
+            self.download_progress[filename] = (progress, speed)
+            
+            # 更新状态栏显示连接信息
+            status_text = f"ED2K下载中... {status} | 源: {sources}"
+            self.update_status_bar(status_text, f"{progress}%", speed)
+                
+        except Exception as e:
+            logger.error(f"ED2K下载进度回调处理错误: {e}")
+
+    def on_magnet_download_finished(self, filepath: str, url: str, selected_format: Dict) -> None:
+        """处理磁力下载完成"""
+        try:
+            # 防止active_downloads变为负数
+            if self.active_downloads > 0:
+                self.active_downloads -= 1
+            
+            # 从下载进度中移除已完成的文件
+            filename = os.path.basename(filepath) if filepath else "磁力下载完成"
+            if filename in self.download_progress:
+                del self.download_progress[filename]
+            
+            logger.info(f"磁力下载完成: {filepath}")
+            
+            # 添加到下载历史记录
+            if filepath and selected_format:
+                self._add_magnet_to_download_history(url, filepath, selected_format)
+            
+            # 更新状态栏
+            self.update_status_bar(f"磁力下载完成: {filename}", "", "")
+            
+            # 显示完成消息
+            QMessageBox.information(self, "下载完成", f"磁力链接下载完成！\n文件保存至: {filepath}")
+            
+        except Exception as e:
+            logger.error(f"处理磁力下载完成失败: {e}")
+
+    def on_magnet_download_error(self, error_msg: str) -> None:
+        """处理磁力下载错误"""
+        try:
+            # 防止active_downloads变为负数
+            if self.active_downloads > 0:
+                self.active_downloads -= 1
+            
+            logger.error(f"磁力下载错误: {error_msg}")
+            
+            # 显示错误消息
+            QMessageBox.critical(self, "磁力下载错误", f"磁力链接下载失败:\n{error_msg}")
+            
+            # 更新状态栏
+            self.update_status_bar(f"磁力下载失败: {error_msg}", "", "")
+            
+        except Exception as e:
+            logger.error(f"处理磁力下载错误失败: {e}")
+
+    def on_ed2k_download_finished(self, filepath: str, url: str, selected_format: Dict) -> None:
+        """处理ED2K下载完成"""
+        try:
+            # 防止active_downloads变为负数
+            if self.active_downloads > 0:
+                self.active_downloads -= 1
+            
+            # 从下载进度中移除已完成的文件
+            filename = os.path.basename(filepath) if filepath else "ED2K下载完成"
+            if filename in self.download_progress:
+                del self.download_progress[filename]
+            
+            logger.info(f"ED2K下载完成: {filepath}")
+            
+            # 添加到下载历史记录
+            if filepath and selected_format:
+                self._add_ed2k_to_download_history(url, filepath, selected_format)
+            
+            # 更新状态栏
+            self.update_status_bar(f"ED2K下载完成: {filename}", "", "")
+            
+            # 显示完成消息
+            QMessageBox.information(self, "下载完成", f"ED2K链接下载完成！\n文件保存至: {filepath}")
+            
+        except Exception as e:
+            logger.error(f"处理ED2K下载完成失败: {e}")
+
+    def on_ed2k_download_error(self, error_msg: str) -> None:
+        """处理ED2K下载错误"""
+        try:
+            # 防止active_downloads变为负数
+            if self.active_downloads > 0:
+                self.active_downloads -= 1
+            
+            logger.error(f"ED2K下载错误: {error_msg}")
+            
+            # 显示错误消息
+            QMessageBox.critical(self, "ED2K下载错误", f"ED2K链接下载失败:\n{error_msg}")
+            
+            # 更新状态栏
+            self.update_status_bar(f"ED2K下载失败: {error_msg}", "", "")
+            
+        except Exception as e:
+            logger.error(f"处理ED2K下载错误失败: {e}")
+
+    def _add_magnet_to_download_history(self, url: str, filepath: str, format_info: Dict) -> None:
+        """添加磁力下载到历史记录"""
+        try:
+            # 获取文件大小
+            file_size = os.path.getsize(filepath) if os.path.exists(filepath) else 0
+            
+            # 创建下载记录
+            record = DownloadRecord(
+                url=url,
+                title=format_info.get('display_name', '磁力链接'),
+                filename=os.path.basename(filepath),
+                format_id='magnet',
+                resolution='磁力链接',
+                file_size=file_size,
+                download_path=os.path.dirname(filepath),
+                platform='magnet'
+            )
+            
+            # 添加到历史记录
+            history_manager.add_record(record)
+            logger.info(f"已添加磁力下载到历史记录: {filepath}")
+            
+        except Exception as e:
+            logger.error(f"添加磁力下载历史失败: {e}")
+
+    def _add_ed2k_to_download_history(self, url: str, filepath: str, format_info: Dict) -> None:
+        """添加ED2K下载到历史记录"""
+        try:
+            # 获取文件大小
+            file_size = os.path.getsize(filepath) if os.path.exists(filepath) else 0
+            
+            # 创建下载记录
+            record = DownloadRecord(
+                url=url,
+                title=format_info.get('file_name', 'ED2K文件'),
+                filename=os.path.basename(filepath),
+                format_id='ed2k',
+                resolution='ED2K链接',
+                file_size=file_size,
+                download_path=os.path.dirname(filepath),
+                platform='ed2k'
+            )
+            
+            # 添加到历史记录
+            history_manager.add_record(record)
+            logger.info(f"已添加ED2K下载到历史记录: {filepath}")
+            
+        except Exception as e:
+            logger.error(f"添加ED2K下载历史失败: {e}")
+
+    def show_magnet_settings_dialog(self) -> None:
+        """显示磁力下载设置对话框"""
+        try:
+            from .magnet_settings_dialog import MagnetSettingsDialog
+            
+            dialog = MagnetSettingsDialog(self)
+            if dialog.exec_() == QDialog.Accepted:
+                # 应用磁力下载设置
+                magnet_settings = dialog.get_settings()
+                self.apply_magnet_settings(magnet_settings)
+                
+        except Exception as e:
+            logger.error(f"显示磁力下载设置对话框失败: {e}")
+            QMessageBox.critical(self, "错误", f"无法打开磁力下载设置: {e}")
+
+    def apply_magnet_settings(self, magnet_settings: Dict[str, Any]) -> None:
+        """应用磁力下载设置"""
+        try:
+            # 更新配置
+            Config.MAGNET_DOWNLOAD_ENABLED = magnet_settings.get('enabled', True)
+            Config.MAGNET_DHT_ENABLED = magnet_settings.get('dht_enabled', True)
+            Config.MAGNET_LSD_ENABLED = magnet_settings.get('lsd_enabled', True)
+            Config.MAGNET_UPNP_ENABLED = magnet_settings.get('upnp_enabled', True)
+            Config.MAGNET_NAT_PMP_ENABLED = magnet_settings.get('nat_pmp_enabled', True)
+            Config.MAGNET_MAX_CONNECTIONS = magnet_settings.get('max_connections', 200)
+            Config.MAGNET_MAX_UPLOADS = magnet_settings.get('max_uploads', 10)
+            Config.MAGNET_DOWNLOAD_TIMEOUT = magnet_settings.get('download_timeout', 300)
+            Config.MAGNET_PROGRESS_UPDATE_INTERVAL = magnet_settings.get('progress_interval', 1.0)
+            
+            logger.info("磁力下载设置已应用")
+            
+        except Exception as e:
+            logger.error(f"应用磁力下载设置失败: {e}")
+
+    def show_ed2k_settings_dialog(self) -> None:
+        """显示ED2K下载设置对话框"""
+        try:
+            from .ed2k_settings_dialog import ED2KSettingsDialog
+            
+            dialog = ED2KSettingsDialog(self)
+            if dialog.exec_() == QDialog.Accepted:
+                # 应用ED2K下载设置
+                ed2k_settings = dialog.get_settings()
+                self.apply_ed2k_settings(ed2k_settings)
+                
+        except Exception as e:
+            logger.error(f"显示ED2K下载设置对话框失败: {e}")
+            QMessageBox.critical(self, "错误", f"无法打开ED2K下载设置: {e}")
+
+    def apply_ed2k_settings(self, ed2k_settings: Dict[str, Any]) -> None:
+        """应用ED2K下载设置"""
+        try:
+            # 更新配置
+            Config.ED2K_DOWNLOAD_ENABLED = ed2k_settings.get('enabled', True)
+            Config.ED2K_KAD_ENABLED = ed2k_settings.get('kad_enabled', True)
+            Config.ED2K_SERVER_ENABLED = ed2k_settings.get('server_enabled', True)
+            Config.ED2K_MAX_CONNECTIONS = ed2k_settings.get('max_connections', 50)
+            Config.ED2K_MAX_DOWNLOADS = ed2k_settings.get('max_downloads', 5)
+            Config.ED2K_DOWNLOAD_TIMEOUT = ed2k_settings.get('download_timeout', 300)
+            Config.ED2K_PROGRESS_UPDATE_INTERVAL = ed2k_settings.get('progress_interval', 1.0)
+            
+            logger.info("ED2K下载设置已应用")
+            
+        except Exception as e:
+            logger.error(f"应用ED2K下载设置失败: {e}")
 
 
 

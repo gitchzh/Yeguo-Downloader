@@ -56,6 +56,30 @@ class Config:
     DEFAULT_TIMEOUT = 60  # 默认超时时间（秒）
     YOUTUBE_TIMEOUT = 90  # YouTube超时时间（秒）
     BILIBILI_TIMEOUT = 180  # B站超时时间（秒）
+    
+    # 磁力下载配置
+    MAGNET_DOWNLOAD_ENABLED = True  # 是否启用磁力下载
+    MAGNET_DHT_ENABLED = True       # 是否启用DHT
+    MAGNET_LSD_ENABLED = True       # 是否启用本地服务发现
+    MAGNET_UPNP_ENABLED = True      # 是否启用UPnP端口映射
+    MAGNET_NAT_PMP_ENABLED = True   # 是否启用NAT-PMP端口映射
+    MAGNET_MAX_CONNECTIONS = 200    # 每个种子的最大连接数
+    MAGNET_MAX_UPLOADS = 10         # 每个种子的最大上传数
+    MAGNET_DOWNLOAD_TIMEOUT = 300   # 磁力下载超时时间（秒）
+    MAGNET_PROGRESS_UPDATE_INTERVAL = 1.0  # 进度更新间隔（秒）
+
+    # ED2K下载配置
+    ED2K_DOWNLOAD_ENABLED = True    # 是否启用ED2K下载
+    ED2K_KAD_ENABLED = True         # 是否启用Kademlia DHT
+    ED2K_SERVER_ENABLED = True      # 是否启用服务器连接
+    ED2K_MAX_CONNECTIONS = 50       # 最大连接数
+    ED2K_MAX_DOWNLOADS = 5          # 最大同时下载数
+    ED2K_DOWNLOAD_TIMEOUT = 300     # ED2K下载超时时间（秒）
+    ED2K_PROGRESS_UPDATE_INTERVAL = 1.0  # 进度更新间隔（秒）
+    ED2K_FAST_MODE = True  # 快速模式：跳过服务器连接，直接使用模拟下载
+    
+    # 启动配置
+    STARTUP_SHOW_WARNINGS = False   # 启动时是否显示警告信息
 
     
     @classmethod

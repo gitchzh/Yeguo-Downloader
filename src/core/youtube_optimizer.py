@@ -39,7 +39,7 @@ class YouTubeOptimizer:
             "quiet": True,  # 静默模式，减少输出
             "no_warnings": True,  # 不显示警告
             "format": "all",  # 解析时获取所有格式
-            "merge_output_format": "mp4",
+            "merge_output_format": "mp4",  # 允许FFmpeg进行音视频合并
             
             # 极限快速网络配置
             "socket_timeout": 10,  # 进一步减少超时
@@ -124,7 +124,7 @@ class YouTubeOptimizer:
             "quiet": True,
             "no_warnings": True,
             "format": "all",
-            "merge_output_format": "mp4",
+            "merge_output_format": "mp4",  # 允许FFmpeg进行音视频合并
             
             # 极限快速网络配置
             "socket_timeout": 8,  # 8秒超时

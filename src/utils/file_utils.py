@@ -20,6 +20,7 @@
 import os
 import re
 import sys
+import platform
 import webbrowser
 from typing import Optional
 from PyQt5.QtWidgets import QMessageBox
@@ -128,10 +129,12 @@ def get_ffmpeg_path(save_path: str) -> Optional[str]:
     """
     获取 FFmpeg 可执行文件路径
     
-    按优先级查找FFmpeg：
-    1. 打包后的可执行文件
-    2. resources目录中的FFmpeg
-    3. 保存路径中的FFmpeg
+    使用跨平台FFmpeg管理器，按优先级查找FFmpeg：
+    1. 系统安装的FFmpeg
+    2. Python原生库（ffmpeg-python, moviepy）
+    3. 打包后的可执行文件
+    4. resources目录中的FFmpeg
+    5. 保存路径中的FFmpeg
     
     Args:
         save_path: 保存路径
@@ -139,31 +142,63 @@ def get_ffmpeg_path(save_path: str) -> Optional[str]:
     Returns:
         Optional[str]: FFmpeg路径，如果未找到则返回None
     """
-    # 检查是否为打包后的可执行文件
-    if getattr(sys, "frozen", False):
-        ffmpeg_exe = os.path.join(sys._MEIPASS, "ffmpeg.exe")
-        if os.path.exists(ffmpeg_exe):
-            return ffmpeg_exe
-    
-    # 检查resources目录中是否有FFmpeg
-    resources_ffmpeg = os.path.join("resources", "ffmpeg.exe")
-    if os.path.exists(resources_ffmpeg):
-        return resources_ffmpeg
-            
-    # 检查保存路径中是否有FFmpeg
-    ffmpeg_path = os.path.join(save_path, "ffmpeg.exe")
-    if os.path.exists(ffmpeg_path):
-        return ffmpeg_path
+    try:
+        # 导入FFmpeg管理器
+        from ..core.ffmpeg_manager import ffmpeg_manager
         
-    logger.warning("FFmpeg 未找到")
-    return None
+        # 如果系统FFmpeg可用，返回路径
+        if ffmpeg_manager.is_available() and ffmpeg_manager.get_method() == "system":
+            return ffmpeg_manager.get_ffmpeg_path()
+        
+        # 如果Python库可用，返回包装器路径
+        if ffmpeg_manager.is_available() and ffmpeg_manager.get_method() in ["python", "moviepy"]:
+            return ffmpeg_manager.get_ffmpeg_path()
+        
+        # 回退到传统检测方法
+        if getattr(sys, "frozen", False):
+            ffmpeg_exe = os.path.join(sys._MEIPASS, "ffmpeg.exe")
+            if os.path.exists(ffmpeg_exe):
+                return ffmpeg_exe
+        
+        # 检查resources目录中是否有FFmpeg
+        resources_ffmpeg = os.path.join("resources", "ffmpeg.exe")
+        if os.path.exists(resources_ffmpeg):
+            return resources_ffmpeg
+                
+        # 检查保存路径中是否有FFmpeg
+        ffmpeg_path = os.path.join(save_path, "ffmpeg.exe")
+        if os.path.exists(ffmpeg_path):
+            return ffmpeg_path
+            
+        logger.warning("FFmpeg 未找到")
+        return None
+        
+    except ImportError:
+        # 如果FFmpeg管理器不可用，使用传统方法
+        if getattr(sys, "frozen", False):
+            ffmpeg_exe = os.path.join(sys._MEIPASS, "ffmpeg.exe")
+            if os.path.exists(ffmpeg_exe):
+                return ffmpeg_exe
+        
+        # 检查resources目录中是否有FFmpeg
+        resources_ffmpeg = os.path.join("resources", "ffmpeg.exe")
+        if os.path.exists(resources_ffmpeg):
+            return resources_ffmpeg
+                
+        # 检查保存路径中是否有FFmpeg
+        ffmpeg_path = os.path.join(save_path, "ffmpeg.exe")
+        if os.path.exists(ffmpeg_path):
+            return ffmpeg_path
+            
+        logger.warning("FFmpeg 未找到")
+        return None
 
 
 def check_ffmpeg(ffmpeg_path: Optional[str], parent_widget=None) -> bool:
     """
     检查 FFmpeg 是否可用
     
-    如果FFmpeg未找到，提示用户并提供下载链接。
+    使用跨平台FFmpeg管理器检查，如果FFmpeg未找到，提示用户并提供安装指导。
     
     Args:
         ffmpeg_path: FFmpeg路径
@@ -172,18 +207,164 @@ def check_ffmpeg(ffmpeg_path: Optional[str], parent_widget=None) -> bool:
     Returns:
         bool: FFmpeg是否可用
     """
-    if not ffmpeg_path:
+    try:
+        # 导入FFmpeg管理器
+        from ..core.ffmpeg_manager import ffmpeg_manager
+        
+        # 如果FFmpeg管理器显示FFmpeg可用，直接返回True
+        if ffmpeg_manager.is_available():
+            return True
+        
+        # 如果FFmpeg管理器不可用，检查传统路径
+        if ffmpeg_path and os.path.exists(ffmpeg_path):
+            return True
+        
+        # FFmpeg不可用，显示安装指导
         msg_box = QMessageBox()
         msg_box.setWindowTitle("FFmpeg 未找到")
-        msg_box.setText("FFmpeg 未找到，是否打开官网下载？\n请将 ffmpeg.exe 放入保存路径后重试。")
-        msg_box.setIcon(QMessageBox.Question)
-        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        msg_box.setDefaultButton(QMessageBox.No)
-        # 设置按钮中文文本
-        msg_box.button(QMessageBox.Yes).setText("是")
-        msg_box.button(QMessageBox.No).setText("否")
-        reply = msg_box.exec_()
-        if reply == QMessageBox.Yes:
-            webbrowser.open("https://ffmpeg.org/download.html")
+        
+        # 根据平台显示不同的安装指导
+        system = platform.system().lower()
+        if system == "windows":
+            msg_text = """FFmpeg 未找到，请选择安装方式：
+
+1. 自动安装（推荐）：
+   - 点击"自动安装"将安装Python FFmpeg库
+
+2. 手动安装系统FFmpeg：
+   - 访问 https://ffmpeg.org/download.html
+   - 下载Windows版本并添加到PATH
+
+3. 使用包管理器：
+   - 使用 chocolatey: choco install ffmpeg
+   - 使用 winget: winget install ffmpeg"""
+            
+            msg_box.setText(msg_text)
+            msg_box.setIcon(QMessageBox.Information)
+            
+            # 添加自动安装按钮
+            auto_install_btn = msg_box.addButton("自动安装", QMessageBox.ActionRole)
+            manual_install_btn = msg_box.addButton("手动安装", QMessageBox.ActionRole)
+            cancel_btn = msg_box.addButton("取消", QMessageBox.RejectRole)
+            
+            msg_box.exec_()
+            
+            clicked_button = msg_box.clickedButton()
+            if clicked_button == auto_install_btn:
+                # 尝试自动安装Python FFmpeg库
+                return _try_auto_install_ffmpeg()
+            elif clicked_button == manual_install_btn:
+                webbrowser.open("https://ffmpeg.org/download.html")
+                return False
+            else:
+                return False
+                
+        elif system == "darwin":  # macOS
+            msg_text = """FFmpeg 未找到，请选择安装方式：
+
+1. 自动安装（推荐）：
+   - 点击"自动安装"将安装Python FFmpeg库
+
+2. 使用Homebrew：
+   - 运行: brew install ffmpeg
+
+3. 手动下载：
+   - 访问 https://ffmpeg.org/download.html"""
+            
+            msg_box.setText(msg_text)
+            msg_box.setIcon(QMessageBox.Information)
+            
+            auto_install_btn = msg_box.addButton("自动安装", QMessageBox.ActionRole)
+            homebrew_btn = msg_box.addButton("Homebrew安装", QMessageBox.ActionRole)
+            cancel_btn = msg_box.addButton("取消", QMessageBox.RejectRole)
+            
+            msg_box.exec_()
+            
+            clicked_button = msg_box.clickedButton()
+            if clicked_button == auto_install_btn:
+                return _try_auto_install_ffmpeg()
+            elif clicked_button == homebrew_btn:
+                webbrowser.open("https://brew.sh")
+                return False
+            else:
+                return False
+                
+        else:  # Linux
+            msg_text = """FFmpeg 未找到，请选择安装方式：
+
+1. 自动安装（推荐）：
+   - 点击"自动安装"将安装Python FFmpeg库
+
+2. 使用包管理器：
+   Ubuntu/Debian: sudo apt-get install ffmpeg
+   CentOS/RHEL: sudo yum install ffmpeg
+   Arch: sudo pacman -S ffmpeg
+
+3. 手动下载：
+   - 访问 https://ffmpeg.org/download.html"""
+            
+            msg_box.setText(msg_text)
+            msg_box.setIcon(QMessageBox.Information)
+            
+            auto_install_btn = msg_box.addButton("自动安装", QMessageBox.ActionRole)
+            cancel_btn = msg_box.addButton("取消", QMessageBox.RejectRole)
+            
+            msg_box.exec_()
+            
+            clicked_button = msg_box.clickedButton()
+            if clicked_button == auto_install_btn:
+                return _try_auto_install_ffmpeg()
+            else:
+                return False
+        
         return False
-    return True
+        
+    except ImportError:
+        # 如果FFmpeg管理器不可用，使用传统检查方法
+        if not ffmpeg_path:
+            msg_box = QMessageBox()
+            msg_box.setWindowTitle("FFmpeg 未找到")
+            msg_box.setText("FFmpeg 未找到，是否打开官网下载？\n请将 ffmpeg.exe 放入保存路径后重试。")
+            msg_box.setIcon(QMessageBox.Question)
+            msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            msg_box.setDefaultButton(QMessageBox.No)
+            # 设置按钮中文文本
+            msg_box.button(QMessageBox.Yes).setText("是")
+            msg_box.button(QMessageBox.No).setText("否")
+            reply = msg_box.exec_()
+            if reply == QMessageBox.Yes:
+                webbrowser.open("https://ffmpeg.org/download.html")
+            return False
+        return True
+
+
+def _try_auto_install_ffmpeg() -> bool:
+    """尝试自动安装Python FFmpeg库"""
+    try:
+        import subprocess
+        import sys
+        
+        # 尝试安装ffmpeg-python
+        result = subprocess.run([
+            sys.executable, "-m", "pip", "install", "ffmpeg-python"
+        ], capture_output=True, text=True, timeout=300)
+        
+        if result.returncode == 0:
+            # 尝试安装moviepy作为备选
+            subprocess.run([
+                sys.executable, "-m", "pip", "install", "moviepy"
+            ], capture_output=True, text=True, timeout=300)
+            
+            # 重新导入FFmpeg管理器检查是否可用
+            try:
+                from ..core.ffmpeg_manager import ffmpeg_manager
+                if ffmpeg_manager.is_available():
+                    return True
+            except ImportError:
+                pass
+        
+        return False
+        
+    except Exception as e:
+        logger.error(f"自动安装FFmpeg失败: {e}")
+        return False

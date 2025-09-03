@@ -21,6 +21,9 @@ import logging
 from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QWaitCondition
 import yt_dlp
 from src.core.youtube_optimizer import YouTubeOptimizer
+from src.core.magnet_manager import magnet_manager
+from src.core.ed2k_manager import ed2k_manager
+from src.utils.logger import logger
 
 class YTDlpLogger:
     """yt-dlp日志记录器，将输出重定向到我们的信号"""
@@ -61,6 +64,16 @@ class ParseWorker(QThread):
 
     def run(self) -> None:
         try:
+            # 检查是否为磁力链接
+            if magnet_manager.is_magnet_link(self.url):
+                self._parse_magnet_link()
+                return
+            
+            # 检查是否为ED2K链接
+            if ed2k_manager.is_ed2k_link(self.url):
+                self._parse_ed2k_link()
+                return
+            
             self.status_signal.emit("开始解析视频...")
             self._check_pause()
             if self._check_cancelled():
@@ -270,7 +283,7 @@ class ParseWorker(QThread):
             "quiet": False,
             "no_warnings": False,
             "format_sort": ["+res", "+fps", "+codec:h264", "+size"],  # 优先按分辨率排序
-            "merge_output_format": "mp4",
+            "merge_output_format": "mp4",  # 允许FFmpeg进行音视频合并
             "socket_timeout": 30,  # 适中的超时时间
             "retries": 3,  # 适中的重试次数
             "fragment_retries": 2,  # 片段重试
@@ -359,3 +372,133 @@ class ParseWorker(QThread):
         paused = self._paused
         self._mutex.unlock()
         return paused
+    
+    def _parse_magnet_link(self) -> None:
+        """解析磁力链接"""
+        try:
+            self.status_signal.emit("开始解析磁力链接...")
+            self._check_pause()
+            if self._check_cancelled():
+                return
+            
+            # 解析磁力链接
+            magnet_info = magnet_manager.parse_magnet_url(self.url)
+            if not magnet_info:
+                raise ValueError("无法解析磁力链接")
+            
+            if not magnet_info.is_valid:
+                raise ValueError("磁力链接格式无效")
+            
+            self.status_signal.emit("磁力链接解析成功，获取种子信息...")
+            self._check_pause()
+            if self._check_cancelled():
+                return
+            
+            # 构建磁力链接信息
+            magnet_data = {
+                'type': 'magnet',
+                'url': self.url,
+                'webpage_url': self.url,  # 添加webpage_url字段
+                'title': magnet_info.display_name or f"磁力链接_{magnet_info.info_hash[:8]}",  # 添加title字段
+                'id': magnet_info.info_hash[:8],  # 添加id字段
+                'info_hash': magnet_info.info_hash,
+                'display_name': magnet_info.display_name or f"磁力链接_{magnet_info.info_hash[:8]}",
+                'file_size': magnet_info.file_size or 0,
+                'file_count': magnet_info.file_count or 1,
+                'tracker_list': magnet_info.tracker_list,
+                'is_valid': magnet_info.is_valid,
+                'duration': 0,  # 添加duration字段
+                'formats': [
+                    {
+                        'format_id': 'magnet',
+                        'ext': 'torrent',
+                        'resolution': '磁力链接',
+                        'filesize': magnet_info.file_size or 0,
+                        'vcodec': 'N/A',
+                        'acodec': 'N/A',
+                        'fps': 0,
+                        'tbr': 0,
+                        'vbr': 0,
+                        'abr': 0,
+                        'height': 0,
+                        'width': 0,
+                        'format_note': '磁力链接下载',
+                        'format': '磁力文件'  # 添加format字段
+                    }
+                ]
+            }
+            
+            # 发送解析完成信号
+            self.video_parsed_signal.emit(magnet_data, self.url)
+            self.finished.emit(magnet_data)
+            
+            self.status_signal.emit("磁力链接解析完成")
+            
+        except Exception as e:
+            error_msg = f"磁力链接解析失败: {e}"
+            logger.error(error_msg)
+            self.error.emit(error_msg)
+    
+    def _parse_ed2k_link(self) -> None:
+        """解析ED2K链接"""
+        try:
+            self.status_signal.emit("开始解析ED2K链接...")
+            self._check_pause()
+            if self._check_cancelled():
+                return
+            
+            # 解析ED2K链接
+            ed2k_info = ed2k_manager.parse_ed2k_url(self.url)
+            if not ed2k_info:
+                raise ValueError("无法解析ED2K链接")
+            
+            if not ed2k_info.is_valid:
+                raise ValueError("ED2K链接格式无效")
+            
+            self.status_signal.emit("ED2K链接解析成功，获取文件信息...")
+            self._check_pause()
+            if self._check_cancelled():
+                return
+            
+            # 构建ED2K链接信息
+            ed2k_data = {
+                'type': 'ed2k',
+                'url': self.url,
+                'webpage_url': self.url,  # 添加webpage_url字段
+                'title': ed2k_info.file_name,  # 添加title字段
+                'id': ed2k_info.file_hash[:8],  # 添加id字段
+                'file_hash': ed2k_info.file_hash,
+                'file_name': ed2k_info.file_name,
+                'file_size': ed2k_info.file_size,
+                'is_valid': ed2k_info.is_valid,
+                'duration': 0,  # 添加duration字段
+                'formats': [
+                    {
+                        'format_id': 'ed2k',
+                        'ext': 'ed2k',
+                        'resolution': 'ED2K链接',
+                        'filesize': ed2k_info.file_size,
+                        'vcodec': 'N/A',
+                        'acodec': 'N/A',
+                        'fps': 0,
+                        'tbr': 0,
+                        'vbr': 0,
+                        'abr': 0,
+                        'height': 0,
+                        'width': 0,
+                        'format_note': 'ED2K链接下载',
+                        'format': 'ED2K文件'  # 添加format字段
+                    }
+                ]
+            }
+            
+            # 发送解析完成信号
+            self.video_parsed_signal.emit(ed2k_data, self.url)
+            self.finished.emit(ed2k_data)
+            
+            self.status_signal.emit("ED2K链接解析完成")
+            
+        except Exception as e:
+            error_msg = f"ED2K链接解析失败: {e}"
+            logger.error(error_msg)
+            self.error.emit(error_msg)

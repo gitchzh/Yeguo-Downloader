@@ -76,7 +76,7 @@ class VideoDownloader(QMainWindow, VideoDownloaderMethods):
         self.is_parsing: bool = False                        # 解析状态标志
         
         # 外部依赖
-        self.ffmpeg_path: Optional[str] = get_ffmpeg_path(self.save_path)  # FFmpeg路径
+        self.ffmpeg_path: Optional[str] = None  # FFmpeg路径，稍后初始化
         self.settings = QSettings("MyCompany", "VideoDownloader")  # 设置管理器
         
         # 系统托盘相关
@@ -85,6 +85,9 @@ class VideoDownloader(QMainWindow, VideoDownloaderMethods):
 
         # 加载配置
         self.load_settings()
+        
+        # 在加载设置后初始化FFmpeg路径
+        self.ffmpeg_path = get_ffmpeg_path(self.save_path)
         
         self.init_ui()
 
@@ -390,7 +393,6 @@ class VideoDownloader(QMainWindow, VideoDownloaderMethods):
                  border: none;
                  line-height: 1.0;
                  max-height: 20px;
-                 overflow: hidden;
                  margin: 0px;
              }
          """)
@@ -907,6 +909,7 @@ class VideoDownloader(QMainWindow, VideoDownloaderMethods):
         # 创建定时器用于更新下载进度
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_download_progress)
+        # 确保定时器在主线程中运行
         self.timer.start(500)  # 每500毫秒更新一次
 
     def update_status_bar(self, main_status: str, progress_info: str = "", file_info: str = "") -> None:

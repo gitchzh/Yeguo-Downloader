@@ -31,6 +31,8 @@ class SettingsDialog(QDialog):
         self.settings = QSettings("MyCompany", "VideoDownloader")
         self.init_ui()
         self.load_settings()
+        # 自动检测FFmpeg状态
+        self.detect_ffmpeg()
         
     def center_on_parent(self) -> None:
         """将对话框居中显示在父窗口上"""
@@ -548,11 +550,19 @@ class SettingsDialog(QDialog):
         ffmpeg_group = QGroupBox("FFmpeg设置")
         ffmpeg_layout = QFormLayout()
         
+        # FFmpeg使用方法选择
+        self.ffmpeg_method_combo = QComboBox()
+        self.ffmpeg_method_combo.addItems(["自动检测", "系统FFmpeg", "Python库", "MoviePy"])
+        self.ffmpeg_method_combo.setCurrentText("自动检测")
+        self.ffmpeg_method_combo.currentTextChanged.connect(self.on_ffmpeg_method_changed)
+        ffmpeg_layout.addRow("FFmpeg使用方法:", self.ffmpeg_method_combo)
+        
+        # FFmpeg路径设置（仅在使用系统FFmpeg时显示）
         self.ffmpeg_path_edit = QLineEdit()
         self.ffmpeg_path_edit.setPlaceholderText("FFmpeg可执行文件路径")
         self.browse_ffmpeg_button = QPushButton("浏览...")
-        self.browse_ffmpeg_button.setFont(QFont("Microsoft YaHei", 11))  # 统一使用微软雅黑字体
-        self.browse_ffmpeg_button.setFixedSize(60, 24)  # 与反馈页面按钮保持一致
+        self.browse_ffmpeg_button.setFont(QFont("Microsoft YaHei", 11))
+        self.browse_ffmpeg_button.setFixedSize(60, 24)
         self.browse_ffmpeg_button.clicked.connect(self.browse_ffmpeg_path)
         
         ffmpeg_button_layout = QHBoxLayout()
@@ -560,6 +570,18 @@ class SettingsDialog(QDialog):
         ffmpeg_button_layout.addWidget(self.browse_ffmpeg_button)
         
         ffmpeg_layout.addRow("FFmpeg路径:", ffmpeg_button_layout)
+        
+        # FFmpeg状态显示
+        self.ffmpeg_status_label = QLabel("状态: 未检测")
+        self.ffmpeg_status_label.setStyleSheet("color: #666; font-size: 11px;")
+        ffmpeg_layout.addRow("", self.ffmpeg_status_label)
+        
+        # 检测FFmpeg按钮
+        self.detect_ffmpeg_button = QPushButton("检测FFmpeg")
+        self.detect_ffmpeg_button.setFont(QFont("Microsoft YaHei", 10))
+        self.detect_ffmpeg_button.clicked.connect(self.detect_ffmpeg)
+        ffmpeg_layout.addRow("", self.detect_ffmpeg_button)
+        
         ffmpeg_group.setLayout(ffmpeg_layout)
         layout.addWidget(ffmpeg_group)
         
@@ -622,6 +644,60 @@ class SettingsDialog(QDialog):
         if file_path:
             self.ffmpeg_path_edit.setText(file_path)
             
+    def on_ffmpeg_method_changed(self, method: str) -> None:
+        """FFmpeg使用方法改变时的处理"""
+        # 根据选择的方法显示/隐藏相关控件
+        if method == "系统FFmpeg":
+            self.ffmpeg_path_edit.setEnabled(True)
+            self.browse_ffmpeg_button.setEnabled(True)
+        else:
+            self.ffmpeg_path_edit.setEnabled(False)
+            self.browse_ffmpeg_button.setEnabled(False)
+            
+    def detect_ffmpeg(self) -> None:
+        """检测FFmpeg状态"""
+        try:
+            from ..core.ffmpeg_manager import ffmpeg_manager
+            
+            if ffmpeg_manager.is_available():
+                method = ffmpeg_manager.get_method()
+                path = ffmpeg_manager.get_ffmpeg_path()
+                version = ffmpeg_manager.get_version()
+                
+                if method == "system":
+                    status_text = f"状态: 系统FFmpeg可用 ({version})"
+                    self.ffmpeg_status_label.setStyleSheet("color: #28a745; font-size: 11px;")
+                elif method == "python":
+                    status_text = f"状态: ffmpeg-python库可用"
+                    self.ffmpeg_status_label.setStyleSheet("color: #28a745; font-size: 11px;")
+                elif method == "moviepy":
+                    status_text = f"状态: MoviePy库可用"
+                    self.ffmpeg_status_label.setStyleSheet("color: #28a745; font-size: 11px;")
+                else:
+                    status_text = f"状态: 未知方法"
+                    self.ffmpeg_status_label.setStyleSheet("color: #dc3545; font-size: 11px;")
+                    
+                self.ffmpeg_status_label.setText(status_text)
+                
+                # 更新使用方法选择
+                if method == "system":
+                    self.ffmpeg_method_combo.setCurrentText("系统FFmpeg")
+                    if path:
+                        self.ffmpeg_path_edit.setText(path)
+                elif method == "python":
+                    self.ffmpeg_method_combo.setCurrentText("Python库")
+                elif method == "moviepy":
+                    self.ffmpeg_method_combo.setCurrentText("MoviePy")
+                    
+            else:
+                self.ffmpeg_status_label.setText("状态: FFmpeg不可用")
+                self.ffmpeg_status_label.setStyleSheet("color: #dc3545; font-size: 11px;")
+                
+        except Exception as e:
+            self.ffmpeg_status_label.setText(f"状态: 检测失败 - {str(e)}")
+            self.ffmpeg_status_label.setStyleSheet("color: #dc3545; font-size: 11px;")
+            logger.error(f"FFmpeg检测失败: {e}")
+            
     def load_settings(self) -> None:
         """加载设置"""
         try:
@@ -650,7 +726,11 @@ class SettingsDialog(QDialog):
             self.play_sound.setChecked(self.settings.value("play_sound", False, type=bool))
             
             # 高级设置
+            ffmpeg_method = self.settings.value("ffmpeg_method", "自动检测")
+            self.ffmpeg_method_combo.setCurrentText(ffmpeg_method)
             self.ffmpeg_path_edit.setText(self.settings.value("ffmpeg_path", ""))
+            # 根据方法设置控件状态
+            self.on_ffmpeg_method_changed(ffmpeg_method)
             self.proxy_enabled.setChecked(self.settings.value("proxy_enabled", False, type=bool))
             self.proxy_url.setText(self.settings.value("proxy_url", ""))
             self.user_agent.setText(self.settings.value("user_agent", ""))
@@ -688,6 +768,7 @@ class SettingsDialog(QDialog):
             self.settings.setValue("play_sound", self.play_sound.isChecked())
             
             # 高级设置
+            self.settings.setValue("ffmpeg_method", self.ffmpeg_method_combo.currentText())
             self.settings.setValue("ffmpeg_path", self.ffmpeg_path_edit.text())
             self.settings.setValue("proxy_enabled", self.proxy_enabled.isChecked())
             self.settings.setValue("proxy_url", self.proxy_url.text())
@@ -746,6 +827,7 @@ class SettingsDialog(QDialog):
             "auto_hide_progress": self.auto_hide_progress.isChecked(),
             "show_completion_dialog": self.show_completion_dialog.isChecked(),
             "play_sound": self.play_sound.isChecked(),
+            "ffmpeg_method": self.ffmpeg_method_combo.currentText(),
             "ffmpeg_path": self.ffmpeg_path_edit.text(),
             "proxy_enabled": self.proxy_enabled.isChecked(),
             "proxy_url": self.proxy_url.text(),
