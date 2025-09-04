@@ -273,7 +273,10 @@ def get_ffmpeg_path(save_path: str) -> Optional[str]:
                 if ffmpeg_path:
                     return ffmpeg_path
         except ImportError:
-            logger.info("FFmpeg管理器不可用，使用传统检测方法")
+            # 如果FFmpeg管理器不可用，使用传统检查方法
+            logger.warning("FFmpeg管理器不可用，使用传统检查方法")
+            if not ffmpeg_path:
+                pass # This block is empty, so it will be removed.
         except Exception as e:
             logger.warning(f"FFmpeg管理器检查失败: {e}")
         

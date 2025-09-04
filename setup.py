@@ -95,7 +95,7 @@ setup(
     zip_safe=False,
     keywords=[
         "download", "manager", "video", "audio", "magnet", "ed2k", "torrent",
-        "youtube", "baidu", "pan", "cloud", "storage"
+        "youtube", "cloud", "storage"
     ],
     project_urls={
         "Bug Reports": "https://github.com/yeguo/yguo-downloader/issues",

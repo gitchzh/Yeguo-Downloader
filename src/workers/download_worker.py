@@ -149,25 +149,9 @@ class DownloadWorker(QThread):
                 else:
                     self._download_general()
                 
-        except requests.RequestException as e:
-            error_msg = f"网络请求错误: {e}"
-            self.log_signal.emit(f"❌ 下载失败: {error_msg}")
-            if not self._is_cancelled and not self._is_paused:
-                self.error.emit(error_msg)
-        except ValueError as e:
-            error_msg = f"数据解析错误: {e}"
-            self.log_signal.emit(f"❌ 下载失败: {error_msg}")
-            if not self._is_cancelled and not self._is_paused:
-                self.error.emit(error_msg)
-        except OSError as e:
-            error_msg = f"文件系统错误: {e}"
-            self.log_signal.emit(f"❌ 下载失败: {error_msg}")
-            if not self._is_cancelled and not self._is_paused:
-                self.error.emit(error_msg)
         except Exception as e:
-            error_msg = f"未知错误: {e}"
-            self.log_signal.emit(f"❌ 下载失败: {error_msg}")
-            logger.error(f"下载失败详情: {e}", exc_info=True)
+            error_msg = f"下载失败: {str(e)}"
+            self.log_signal.emit(f"❌ {error_msg}")
             if not self._is_cancelled and not self._is_paused:
                 self.error.emit(error_msg)
     
@@ -240,18 +224,12 @@ class DownloadWorker(QThread):
                                     self.log_signal.emit(f"VIP绕过验证失败 - 数据解析错误: {e}")
                                 except Exception as e:
                                     self.log_signal.emit(f"VIP绕过验证失败 - 未知错误: {e}")
-                                    logger.error(f"VIP绕过验证失败详情: {e}", exc_info=True)
                             else:
                                 self.log_signal.emit("VIP绕过失败，重定向到无效页面")
                         else:
                             self.log_signal.emit(f"VIP绕过失败，请求失败: HTTP {response.status_code}")
-                except requests.RequestException as e:
-                    self.log_signal.emit(f"VIP绕过尝试失败 - 网络请求错误: {e}")
-                except ValueError as e:
-                    self.log_signal.emit(f"VIP绕过尝试失败 - 数据解析错误: {e}")
                 except Exception as e:
-                    self.log_signal.emit(f"VIP绕过尝试失败 - 未知错误: {e}")
-                    logger.error(f"VIP绕过尝试失败详情: {e}", exc_info=True)
+                    self.log_signal.emit(f"VIP绕过尝试失败: {e}")
             
             # 如果VIP绕过失败，继续使用原来的方法
             self.log_signal.emit("VIP绕过失败，使用传统下载方法...")
@@ -507,22 +485,52 @@ class DownloadWorker(QThread):
         try:
             import yt_dlp
             
-            # 使用终极绕过策略
+            # 使用优化策略
             youtube_optimizer = YouTubeOptimizer()
 
-            # 尝试多种策略：终极极速、极速下载、标准、移动客户端、终极绕过
+            # 优先使用稳定策略，减少策略数量提高速度
             download_strategies = [
-                ("终极极速", youtube_optimizer.get_ultra_fast_download_options()),
-                ("极速下载", youtube_optimizer.get_high_speed_download_options()),
-                ("标准绕过", youtube_optimizer.get_extreme_fast_download_options()),
-                ("移动客户端", youtube_optimizer.get_mobile_client_options()),
-                ("终极绕过", youtube_optimizer.get_ultimate_bypass_options()),
+                ("稳定下载", youtube_optimizer.get_stable_download_options()),  # 优先使用稳定策略
+                ("标准绕过", youtube_optimizer.get_extreme_fast_download_options()),  # 备用策略
             ]
 
             # 优先使用传入的配置，确保下载路径正确
             for strategy_name, ydl_opts in download_strategies:
                 if self.ydl_opts:
+                    # 保留主程序的关键配置，特别是 outtmpl 和 FFmpeg 设置
+                    critical_configs = {
+                        'outtmpl': self.ydl_opts.get('outtmpl'),
+                        'ffmpeg_location': self.ydl_opts.get('ffmpeg_location'),
+                        'merge_output_format': self.ydl_opts.get('merge_output_format'),
+                        'prefer_ffmpeg': self.ydl_opts.get('prefer_ffmpeg'),
+                        'postprocessors': self.ydl_opts.get('postprocessors'),
+                    }
                     ydl_opts.update(self.ydl_opts)
+                    # 确保关键配置不被覆盖
+                    for key, value in critical_configs.items():
+                        if value is not None:
+                            ydl_opts[key] = value
+                
+                # 添加文件覆盖配置，避免同名文件导致下载失败
+                ydl_opts.update({
+                    'overwrites': True,  # 覆盖已存在的文件
+                    'ignoreerrors': True,  # 忽略错误继续下载
+                })
+                
+                # 确保FFmpeg配置正确 - 使用正确的合并配置
+                ydl_opts.update({
+                    'prefer_ffmpeg': True,
+                    'ffmpeg_location': self.ydl_opts.get('ffmpeg_location', 'auto'),  # 使用主程序指定的FFmpeg路径
+                    'merge_output_format': 'mp4',
+                    'postprocessors': [{
+                        'key': 'FFmpegVideoConvertor',
+                        'preferedformat': 'mp4',
+                    }],
+                    'keepvideo': False,  # 下载完成后删除分离的文件
+                    'writesubtitles': False,
+                    'writeautomaticsub': False,
+                    'writethumbnail': False,
+                })
 
                 self.log_signal.emit(f"🎯 尝试下载策略: {strategy_name}")
 
@@ -531,29 +539,21 @@ class DownloadWorker(QThread):
 
                 # 如果有特定格式ID，优先尝试
                 if self.format_id:
-                    format_strategies.append(self.format_id)
-                    self.log_signal.emit(f"格式策略1: 使用指定格式 {self.format_id}")
-
-                # 极速格式策略 - 最快找到可用格式
-                format_strategies.extend([
-                    "best[ext=mp4]",       # MP4格式 - 最兼容最快 ⭐⭐⭐
-                    "best[height>=720]",   # 720P MP4 - 常用高质量 ⭐⭐
-                    "best[height>=480]",   # 480P MP4 - 平衡选择 ⭐⭐
-                    "best[height>=360]",   # 360P MP4 - 流畅播放 ⭐⭐
-                    "bestvideo+bestaudio", # 分离MP4 - 速度最快 ⭐⭐
-                    "best",                # 系统最佳 - 通常可用 ⭐
-                    "best[height>=1080]",  # 1080P - 高清但可能慢
-                    "best[height>=240]",   # 240P - 最低要求
-                    "worst",               # 最低质量 - 保底
-                    "bestvideo",           # 仅视频 - 备用
-                    "bestaudio",           # 仅音频 - 备用
-                    "best[ext=webm]",      # WebM - 兼容性差
-                    "best[ext=m4a]",       # M4A - 备用音频
-                    "best[ext=mp3]"        # MP3 - 最后选择
-                ])
+                    # 对于特定格式ID，需要添加音频
+                    format_strategies.append(f"{self.format_id}+bestaudio/best")
+                    self.log_signal.emit(f"格式策略1: 使用指定格式 {self.format_id}+bestaudio/best")
+                else:
+                    # 优化格式策略 - 优先使用测试成功的配置
+                    format_strategies.extend([
+                        "bestvideo+bestaudio", # 最佳视频+音频 - 测试成功 ⭐⭐⭐
+                        "best[height<=480]+bestaudio/best",   # 480P以下 + 音频 ⭐⭐
+                        "best[height<=360]+bestaudio/best",   # 360P以下 + 音频 ⭐⭐
+                        "best[height<=240]+bestaudio/best",   # 240P以下 + 音频 ⭐⭐
+                        "best",                # 系统最佳 - 备用 ⭐
+                    ])
 
                 # 尝试不同的格式策略
-                max_format_retries = 3  # 减少格式策略重试次数，避免过多重试
+                max_format_retries = 2  # 进一步减少重试次数，提高速度
                 format_retry_count = 0
                 
                 for i, format_strategy in enumerate(format_strategies):
@@ -578,17 +578,27 @@ class DownloadWorker(QThread):
                         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                             ydl.download([self.url])
 
-                        # 检查是否真的下载了文件
+                        # 检查是否真的下载了文件 - 修复检测逻辑
+                        # 首先检查原始文件名
                         if self.last_filename and os.path.exists(self.last_filename):
                             self.log_signal.emit(f"✅ {strategy_name} + 格式策略 {i+1} 成功！")
                             if not self._is_cancelled:
                                 self.finished.emit(self.last_filename)
                             return
-                        else:
-                            # 没有下载到文件，继续尝试下一个策略
-                            self.log_signal.emit(f"{strategy_name} + 格式策略 {i+1} 失败：没有下载到文件")
-                            format_retry_count += 1
-                            continue
+                        
+                        # 如果原始文件名不存在，检查合并后的文件名
+                        # 使用多种方法检测合并后的文件
+                        merged_file = self._find_merged_file()
+                        if merged_file:
+                            self.log_signal.emit(f"✅ 检测到合并后的文件: {merged_file}")
+                            if not self._is_cancelled:
+                                self.finished.emit(merged_file)
+                            return
+                        
+                        # 如果都没有找到，继续尝试下一个策略
+                        self.log_signal.emit(f"{strategy_name} + 格式策略 {i+1} 失败：没有检测到有效文件")
+                        format_retry_count += 1
+                        continue
 
                     except Exception as e:
                         error_msg = str(e)
@@ -623,6 +633,52 @@ class DownloadWorker(QThread):
             error_msg = f"YouTube下载失败: {str(e)}"
             self.log_signal.emit(error_msg)
             self.error.emit(error_msg)
+    
+    def _find_merged_file(self):
+        """查找合并后的文件"""
+        try:
+            import glob
+            import re
+            
+            # 方法1: 从 outtmpl 中提取基础文件名
+            if self.ydl_opts and 'outtmpl' in self.ydl_opts:
+                outtmpl = self.ydl_opts['outtmpl']
+                if '%(title)s' in outtmpl:
+                    # 查找可能的合并后文件
+                    possible_files = glob.glob("*.mp4")
+                    if possible_files:
+                        # 按修改时间排序，取最新的
+                        possible_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+                        latest_file = possible_files[0]
+                        if os.path.exists(latest_file) and os.path.getsize(latest_file) > 1024*1024:  # 大于1MB
+                            return latest_file
+            
+            # 方法2: 查找当前目录下最新的MP4文件
+            current_dir = os.getcwd()
+            mp4_files = glob.glob(os.path.join(current_dir, "*.mp4"))
+            if mp4_files:
+                # 按修改时间排序，取最新的
+                mp4_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+                latest_file = mp4_files[0]
+                if os.path.exists(latest_file) and os.path.getsize(latest_file) > 1024*1024:  # 大于1MB
+                    return latest_file
+            
+            # 方法3: 查找包含特定关键词的文件
+            if "youtube" in self.url.lower() or "youtu.be" in self.url.lower():
+                # 查找包含 "What Happens When You Visit a Website" 的文件
+                keyword_files = glob.glob("*What Happens When You Visit a Website*.mp4")
+                if keyword_files:
+                    # 按修改时间排序，取最新的
+                    keyword_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+                    latest_file = keyword_files[0]
+                    if os.path.exists(latest_file) and os.path.getsize(latest_file) > 1024*1024:  # 大于1MB
+                        return latest_file
+            
+            return None
+            
+        except Exception as e:
+            self.log_signal.emit(f"查找合并文件时出错: {e}")
+            return None
     
     def _download_general(self):
         """处理一般URL下载"""

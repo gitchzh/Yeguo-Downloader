@@ -36,7 +36,7 @@ except ImportError:
             logger.warning("libtorrent库未安装，磁力下载功能将不可用")
     except ImportError:
         # 如果配置模块还未导入，静默处理
-        pass
+        logger.debug("配置模块未导入，跳过libtorrent检查")
 
 
 class MagnetDownloadWorker(QThread):

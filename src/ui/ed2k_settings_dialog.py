@@ -40,58 +40,199 @@ class ED2KSettingsDialog(QDialog):
     def init_ui(self):
         """初始化用户界面"""
         self.setWindowTitle("ED2K下载设置")
-        self.setFixedSize(600, 500)
+        self.setFixedSize(650, 550)  # 与设置界面保持一致的尺寸
         self.setModal(True)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         
-        # 设置样式
+        # 设置与设置界面一致的样式表
         self.setStyleSheet("""
+            /* 全局字体设置 - 统一微软雅黑 */
+            * {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-size: 13px;
+                font-weight: 400;
+            }
+            
             QDialog {
                 background-color: #ffffff;
-                border: 1px solid #e0e0e0;
+                color: #1e1e1e;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-size: 13px;
+            }
+            
+            QTabWidget::pane {
+                border: 1px solid #e9ecef;
+                background-color: #ffffff;
                 border-radius: 8px;
             }
-            QGroupBox {
-                font-weight: bold;
-                border: 2px solid #e0e0e0;
-                border-radius: 6px;
-                margin-top: 10px;
-                padding-top: 10px;
+            
+            QTabBar::tab {
+                background-color: #f8f9fa;
+                color: #1e1e1e;
+                padding: 8px 16px;
+                margin-right: 2px;
+                border: 1px solid #e9ecef;
+                border-bottom: none;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                font-weight: 400;
             }
+            
+            QTabBar::tab:selected {
+                background-color: #ffffff;
+                color: #007bff;
+                border-bottom: 2px solid #007bff;
+            }
+            
+            QTabBar::tab:hover {
+                background-color: #e9ecef;
+            }
+            
+            QGroupBox {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-size: 13px;
+                font-weight: 400;
+                color: #1e1e1e;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                margin-top: 12px;
+                padding-top: 12px;
+                background-color: #f8f9fa;
+            }
+            
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
+                left: 8px;
+                padding: 0 6px 0 6px;
+                color: #1e1e1e;
             }
+            
+            /* 按钮样式 - 统一风格 */
             QPushButton {
-                background-color: #0078d4;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-weight: bold;
+                background-color: #fdfdfd;
+                color: #000000;
+                border: 1px solid #d5d5d5;
+                border-radius: 3px;
+                padding: 4px 8px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-size: 13px;
+                min-height: 20px;
+                min-width: 50px;
+                margin: 0px;
+                font-weight: normal;
             }
+
             QPushButton:hover {
-                background-color: #106ebe;
+                background-color: #cce4f7;
+                border: 1px solid #2670ad;
             }
-            QPushButton:pressed {
-                background-color: #005a9e;
+            
+            /* 输入框样式 - Cursor风格浅色主题 */
+            QTextEdit, QLineEdit {
+                font-size: 13px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                padding: 6px 12px;
+                border: 1px solid #e9ecef;
+                background-color: #ffffff;
+                border-radius: 8px;
+                color: #1e1e1e;
+                selection-background-color: #007bff;
+                margin: 0px;
             }
-            QLineEdit, QSpinBox, QComboBox {
-                border: 1px solid #d0d0d0;
+
+            QTextEdit:focus, QLineEdit:focus {
+                border: 1px solid #007bff;
+                outline: none;
+                border-radius: 8px;
+            }
+
+            QTextEdit:hover, QLineEdit:hover {
+                border: 1px solid #007bff;
+                border-radius: 8px;
+            }
+            
+            /* 标签样式 - Cursor风格浅色主题 */
+            QLabel {
+                font-size: 13px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                color: #1e1e1e;
+                font-weight: 400;
+            }
+            
+            /* 数字输入框和下拉框样式 - Cursor风格浅色主题 */
+            QSpinBox, QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #e9ecef;
+                padding: 8px 12px;
+                color: #1e1e1e;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-size: 13px;
+                border-radius: 8px;
+            }
+            
+            QSpinBox:focus, QComboBox:focus {
+                border: 1px solid #007bff;
+                border-radius: 8px;
+            }
+            
+            QSpinBox:hover, QComboBox:hover {
+                border: 1px solid #007bff;
+                border-radius: 8px;
+            }
+            
+            /* 复选框样式 - Cursor风格浅色主题 */
+            QCheckBox {
+                color: #1e1e1e;
+                font-size: 13px;
+                spacing: 6px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            }
+            
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+                border: 1px solid #e9ecef;
                 border-radius: 4px;
-                padding: 6px;
                 background-color: #ffffff;
             }
-            QLineEdit:focus, QSpinBox:focus, QComboBox:focus {
-                border-color: #0078d4;
+            
+            QCheckBox::indicator:checked {
+                background-color: #007bff;
+                border: 1px solid #007bff;
+                image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOSIgdmlld0JveD0iMCAwIDEyIDkiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDQuNUw0LjUgOEwxMSAxIiBzdHJva2U9IndoaXRlIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+Cg==);
+            }
+            
+            QCheckBox::indicator:hover {
+                border: 1px solid #007bff;
+            }
+            
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            
+            QScrollBar:vertical {
+                background-color: #f0f0f0;
+                width: 12px;
+                border-radius: 6px;
+            }
+            
+            QScrollBar::handle:vertical {
+                background-color: #c1c1c1;
+                min-height: 20px;
+                border-radius: 6px;
+                border: none;
+            }
+            
+            QScrollBar::handle:vertical:hover {
+                background-color: #a8a8a8;
             }
         """)
         
-        # 创建主布局
+        # 创建主布局 - 与设置界面保持一致的间距和边距
         main_layout = QVBoxLayout()
-        main_layout.setSpacing(20)
-        main_layout.setContentsMargins(25, 25, 25, 25)
+        main_layout.setSpacing(15)  # 减少间距，更紧凑
+        main_layout.setContentsMargins(20, 20, 20, 20)  # 减少边距，更紧凑
         
         # 创建标签页
         tab_widget = QTabWidget()
@@ -110,22 +251,25 @@ class ED2KSettingsDialog(QDialog):
         
         main_layout.addWidget(tab_widget)
         
-        # 按钮区域
+        # 按钮区域 - 与设置界面保持一致的样式
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         
         # 重置按钮
         reset_button = QPushButton("重置默认")
+        reset_button.setFixedSize(80, 30)  # 固定尺寸，与设置界面一致
         reset_button.clicked.connect(self.reset_to_defaults)
         button_layout.addWidget(reset_button)
         
         # 确定按钮
         ok_button = QPushButton("确定")
+        ok_button.setFixedSize(80, 30)  # 固定尺寸，与设置界面一致
         ok_button.clicked.connect(self.accept)
         button_layout.addWidget(ok_button)
         
         # 取消按钮
         cancel_button = QPushButton("取消")
+        cancel_button.setFixedSize(80, 30)  # 固定尺寸，与设置界面一致
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(cancel_button)
         
@@ -137,12 +281,13 @@ class ED2KSettingsDialog(QDialog):
         """创建基本设置标签页"""
         widget = QWidget()
         layout = QVBoxLayout()
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)  # 与设置界面保持一致的间距
+        layout.setContentsMargins(20, 20, 20, 20)  # 与设置界面保持一致的边距
         
         # 启用ED2K下载
         enable_group = QGroupBox("功能启用")
         enable_layout = QFormLayout()
+        enable_layout.setSpacing(8)  # 减少表单项间距，更紧凑
         
         self.enable_ed2k_checkbox = QCheckBox("启用ED2K下载功能")
         self.enable_ed2k_checkbox.setToolTip("启用或禁用ED2K链接下载功能")
@@ -154,6 +299,7 @@ class ED2KSettingsDialog(QDialog):
         # 下载设置
         download_group = QGroupBox("下载设置")
         download_layout = QFormLayout()
+        download_layout.setSpacing(8)  # 减少表单项间距，更紧凑
         
         self.download_timeout_spinbox = QSpinBox()
         self.download_timeout_spinbox.setRange(60, 1800)
@@ -178,12 +324,13 @@ class ED2KSettingsDialog(QDialog):
         """创建网络设置标签页"""
         widget = QWidget()
         layout = QVBoxLayout()
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)  # 与设置界面保持一致的间距
+        layout.setContentsMargins(20, 20, 20, 20)  # 与设置界面保持一致的边距
         
         # 端口设置
         port_group = QGroupBox("端口设置")
         port_layout = QFormLayout()
+        port_layout.setSpacing(8)  # 减少表单项间距，更紧凑
         
         self.tcp_port_spinbox = QSpinBox()
         self.tcp_port_spinbox.setRange(1024, 65535)
@@ -203,6 +350,7 @@ class ED2KSettingsDialog(QDialog):
         # 网络功能设置
         network_group = QGroupBox("网络功能")
         network_layout = QFormLayout()
+        network_layout.setSpacing(8)  # 减少表单项间距，更紧凑
         
         self.enable_kad_checkbox = QCheckBox("启用Kademlia DHT")
         self.enable_kad_checkbox.setToolTip("启用分布式哈希表网络，提高文件发现能力")
@@ -223,12 +371,13 @@ class ED2KSettingsDialog(QDialog):
         """创建高级设置标签页"""
         widget = QWidget()
         layout = QVBoxLayout()
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)  # 与设置界面保持一致的间距
+        layout.setContentsMargins(20, 20, 20, 20)  # 与设置界面保持一致的边距
         
         # 连接设置
         connection_group = QGroupBox("连接设置")
         connection_layout = QFormLayout()
+        connection_layout.setSpacing(8)  # 减少表单项间距，更紧凑
         
         self.max_connections_spinbox = QSpinBox()
         self.max_connections_spinbox.setRange(10, 500)
@@ -246,6 +395,7 @@ class ED2KSettingsDialog(QDialog):
         # 速度限制设置
         speed_group = QGroupBox("速度限制")
         speed_layout = QFormLayout()
+        speed_layout.setSpacing(8)  # 减少表单项间距，更紧凑
         
         self.download_speed_spinbox = QSpinBox()
         self.download_speed_spinbox.setRange(0, 100000)

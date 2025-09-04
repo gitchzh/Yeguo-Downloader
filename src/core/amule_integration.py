@@ -364,8 +364,8 @@ class BuiltinAMule:
     
     def _maintain_connections(self):
         """维护连接"""
-        # 发送心跳包或保持连接
-        pass
+        # TODO: 实现连接维护逻辑，发送心跳包或保持连接
+        logger.debug("连接维护功能待实现")
     
     def _download_manager_worker(self):
         """下载管理工作线程"""

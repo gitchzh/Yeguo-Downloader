@@ -358,6 +358,7 @@ class VideoDownloader(QMainWindow, VideoDownloaderMethods):
                  font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
                  padding: 0px;
                  margin: 0px;
+                 min-height: 24px;  /* 确保状态栏有足够高度 */
              }
              
              QStatusBar::item {
@@ -378,10 +379,12 @@ class VideoDownloader(QMainWindow, VideoDownloaderMethods):
         
         # 创建完整状态栏显示区域
         self.status_scroll_label = QLabel("就绪")
-        self.status_scroll_label.setWordWrap(True)  # 启用自动换行
+        self.status_scroll_label.setWordWrap(False)  # 禁用自动换行，确保只显示一行
         self.status_scroll_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # 左对齐，垂直居中
         self.status_scroll_label.setMaximumHeight(20)  # 限制最大高度为20像素
         self.status_scroll_label.setMinimumHeight(20)   # 设置最小高度为20像素
+        # 设置文本格式，超出宽度时显示省略号
+        self.status_scroll_label.setTextFormat(Qt.PlainText)
         self.status_scroll_label.setStyleSheet("""
              QLabel {
                  color: #ffffff;
@@ -403,6 +406,9 @@ class VideoDownloader(QMainWindow, VideoDownloaderMethods):
         
         # 添加到状态栏 - 占用整个状态栏
         self.statusBar.addWidget(self.status_scroll_label, 1)  # 1表示拉伸因子
+        
+        # 设置状态栏标签的最小宽度，确保有足够空间显示信息
+        self.status_scroll_label.setMinimumWidth(800)
         
         # 初始化状态
         self.update_status_bar("就绪", "", "")
@@ -939,68 +945,82 @@ class VideoDownloader(QMainWindow, VideoDownloaderMethods):
 
     def update_scroll_status(self, status_text: str) -> None:
         """
-        更新状态显示 - 累积显示所有解析和下载信息
+        更新状态显示 - 每次只显示一行，显示所有后台信息
         
         Args:
             status_text: 状态文本
         """
-        # 检查是否处于解析暂停状态，如果是则忽略状态更新
-        if hasattr(self, 'smart_parse_button') and self.smart_parse_button.text() == "解析" and hasattr(self, 'is_parsing') and self.is_parsing:
-            # 处于解析暂停状态，忽略状态更新
-            return
-        
-        # 检查是否处于下载暂停状态，如果是则忽略状态更新
-        if hasattr(self, 'smart_pause_button') and self.smart_pause_button.text() == "恢复下载":
-            # 处于下载暂停状态，忽略状态更新
-            return
-        
-        # 添加时间戳
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        formatted_text = f"[{timestamp}] {status_text}"
-        
-        # 获取当前状态栏文本
-        current_text = self.status_scroll_label.text()
-        
-        # 如果是下载进度信息，替换最后一行；否则追加新行
-        if "download" in status_text.lower() or "下载" in status_text:
-            # 下载进度信息，替换最后一行
-            if current_text:
-                lines = current_text.split('\n')
-                if lines and ("download" in lines[-1].lower() or "下载" in lines[-1]):
-                    lines[-1] = formatted_text
-                    new_text = '\n'.join(lines)
+        try:
+            # 检查状态栏标签是否存在
+            if not hasattr(self, 'status_scroll_label') or not self.status_scroll_label:
+                return
+            
+            # 检查是否处于解析暂停状态，如果是则忽略状态更新
+            if hasattr(self, 'smart_parse_button') and self.smart_parse_button.text() == "解析" and hasattr(self, 'is_parsing') and self.is_parsing:
+                # 处于解析暂停状态，忽略状态更新
+                return
+            
+            # 检查是否处于下载暂停状态，如果是则忽略状态更新
+            if hasattr(self, 'smart_pause_button') and self.smart_pause_button.text() == "恢复下载":
+                # 处于下载暂停状态，忽略状态更新
+                return
+            
+            # 不过滤任何消息，显示所有后台信息
+            # 添加时间戳
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            formatted_text = f"[{timestamp}] {status_text}"
+            
+            # 检查文本长度，如果过长则截断
+            max_length = 120  # 最大显示长度
+            if len(formatted_text) > max_length:
+                # 保留时间戳和开头部分，末尾添加省略号
+                timestamp_part = f"[{timestamp}] "
+                available_length = max_length - len(timestamp_part) - 3  # 3是省略号长度
+                if available_length > 0:
+                    truncated_text = f"{timestamp_part}{status_text[:available_length]}..."
                 else:
-                    new_text = current_text + '\n' + formatted_text
+                    truncated_text = f"{timestamp_part}..."
             else:
-                new_text = formatted_text
+                truncated_text = formatted_text
+            
+            # 直接更新状态栏，每次只显示一行
+            self.status_scroll_label.setText(truncated_text)
+            
+            # 记录最新状态
             self.latest_progress = status_text
-        else:
-            # 其他信息，追加新行
-            if current_text:
-                new_text = current_text + '\n' + formatted_text
-            else:
-                new_text = formatted_text
+                
+        except Exception as e:
+            # 记录错误但不影响程序运行
+            print(f"状态栏更新失败: {e}")
+    
+    def _should_filter_status_message(self, message: str) -> bool:
+        """判断是否应该过滤掉状态消息"""
+        # 过滤掉一些过于频繁或无用的消息
+        filter_patterns = [
+            "状态栏更新失败",
+            "QObject::startTimer",
+            "QObject::killTimer",
+            "QThread::start",
+            "QThread::wait"
+        ]
         
-        # 限制显示行数，只保留最后2行
-        lines = new_text.split('\n')
-        if len(lines) > 2:
-            lines = lines[-2:]
-            new_text = '\n'.join(lines)
+        for pattern in filter_patterns:
+            if pattern in message:
+                return True
         
-        # 更新状态栏显示
-        self.status_scroll_label.setText(new_text)
+        # 过滤掉过于频繁的进度信息
+        if "progress" in message.lower() and "download" in message.lower():
+            # 限制下载进度信息的频率
+            current_time = time.time()
+            if not hasattr(self, '_last_progress_time'):
+                self._last_progress_time = 0
+            
+            if current_time - self._last_progress_time < 1:  # 1秒内只显示一次
+                return True
+            self._last_progress_time = current_time
         
-        # 确保状态栏不会超出最大高度
-        if self.status_scroll_label.height() > 20:
-            self.status_scroll_label.setMaximumHeight(20)
-
-    def _update_scroll_display(self) -> None:
-        """
-        更新状态显示内容（已废弃，保留方法以避免错误）
-        """
-        # 此方法已不再使用，但保留以避免信号连接错误
-        pass
+        return False
 
     def create_menu_bar(self) -> None:
         """
@@ -1056,6 +1076,11 @@ class VideoDownloader(QMainWindow, VideoDownloaderMethods):
         settings_action = tools_menu.addAction('设置(&S)')
         settings_action.setShortcut('Ctrl+,')
         settings_action.triggered.connect(self.show_settings_dialog)
+        
+        # ED2K设置
+        ed2k_settings_action = tools_menu.addAction('ED2K设置(&E)')
+        ed2k_settings_action.setShortcut('Ctrl+Shift+E')
+        ed2k_settings_action.triggered.connect(self.show_ed2k_settings_dialog)
         
         # 下载历史
         history_action = tools_menu.addAction('下载历史(&H)')
@@ -1145,6 +1170,11 @@ class VideoDownloader(QMainWindow, VideoDownloaderMethods):
         settings_action = QAction("设置", self)
         settings_action.triggered.connect(self.show_settings_dialog)
         tray_menu.addAction(settings_action)
+        
+        # ED2K设置
+        ed2k_settings_action = QAction("ED2K设置", self)
+        ed2k_settings_action.triggered.connect(self.show_ed2k_settings_dialog)
+        tray_menu.addAction(ed2k_settings_action)
         
         # 下载历史
         history_action = QAction("下载历史", self)

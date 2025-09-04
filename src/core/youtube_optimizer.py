@@ -32,62 +32,68 @@ class YouTubeOptimizer:
         else:
             return 'video'
     
-    def get_standard_options(self) -> Dict[str, Any]:
-        """获取标准配置 - 极限快速解析策略"""
+    def get_stable_download_options(self) -> Dict[str, Any]:
+        """获取稳定下载配置 - 基于测试成功的配置"""
         return {
-            # 基本配置
-            "quiet": True,  # 静默模式，减少输出
-            "no_warnings": True,  # 不显示警告
-            "format": "all",  # 解析时获取所有格式
+            # 基本配置 - 简化以提高速度
+            "quiet": False,  # 显示输出，便于调试
+            "no_warnings": False,  # 显示警告
+            "format": "bestvideo+bestaudio",  # 使用测试成功的格式
             "merge_output_format": "mp4",  # 允许FFmpeg进行音视频合并
             
-            # 极限快速网络配置
-            "socket_timeout": 10,  # 进一步减少超时
-            "retries": 0,  # 不重试，快速失败
-            "fragment_retries": 0,
-            "extractor_retries": 0,
-            "http_chunk_size": 4194304,  # 4MB，更大的块大小
-            "buffersize": 4096,  # 更大的缓冲区
+            # 网络配置 - 适度优化
+            "socket_timeout": 30,  # 减少超时时间，提高响应速度
+            "retries": 3,  # 减少重试次数
+            "fragment_retries": 2,
+            "extractor_retries": 1,
+            "http_chunk_size": 1048576,  # 1MB，平衡速度和稳定性
+            "buffersize": 4096,  # 4KB缓冲区
             
-            # 优化的请求头 - 避免403错误
+            # 简化的请求头 - 避免过度配置
             "headers": {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate, br",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate",
                 "Connection": "keep-alive",
-                "Upgrade-Insecure-Requests": "1",
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "none",
-                "Sec-Fetch-User": "?1",
-                "Cache-Control": "max-age=0",
             },
             
-            # 格式排序 - 优先获取常用格式
-            "format_sort": ["+res", "+fps", "+codec:h264", "+size"],
-            "format_sort_force": True,
+            # 格式排序 - 简化配置
+            "format_sort": ["+res", "+fps"],
             
-            # 极限解析优化 - 跳过所有不必要的检查
-            "skip": ["dash", "live", "hls"],  # 跳过更多格式
+            # 稳定解析优化 - 减少检查
+            "skip": ["live"],  # 只跳过直播
             "nocheckcertificate": True,
             "prefer_insecure": True,
-            "no_check_certificate": True,
             
-            # 跳过格式测试 - 这是关键优化
+            # 减少格式检查 - 提高速度
             "check_formats": False,  # 不检查格式可用性
             "test": False,  # 不测试格式
             
             # 下载配置
             "continuedl": True,
-            "noprogress": True,  # 不显示进度
-            "ignoreerrors": True,  # 忽略错误
-            "no_warnings": True,
+            "noprogress": False,  # 显示进度
+            "ignoreerrors": False,  # 不忽略错误，提高质量
+            
+            # 确保FFmpeg可用
+            "prefer_ffmpeg": True,
+            "ffmpeg_location": "auto",
+            
+            # 音视频合并配置 - 关键设置
+            "merge_output_format": "mp4",
+            "postprocessors": [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4',
+            }],
+            
+            # 并发下载 - 适度并发
+            "concurrent_fragment_downloads": 2,  # 减少并发数，提高稳定性
+            "concurrent_fragments": 2,
         }
     
     def get_optimized_options(self, strategy: str = 'balanced', network_preset: str = 'balanced') -> Dict[str, Any]:
         """获取优化配置"""
-        base_opts = self.get_standard_options()
+        base_opts = self.get_stable_download_options()
         
         if strategy == 'fast':
             # 快速策略
@@ -159,6 +165,10 @@ class YouTubeOptimizer:
             "noprogress": True,
             "ignoreerrors": True,
             "no_warnings": True,
+            
+            # 确保FFmpeg可用
+            "prefer_ffmpeg": True,
+            "ffmpeg_location": "auto",
         }
     
     def get_ultra_fast_parse_options(self) -> Dict[str, Any]:
@@ -252,6 +262,17 @@ class YouTubeOptimizer:
             "sleep_interval": 0,
             "max_sleep_interval": 0,
             "sleep_interval_requests": 0,
+            
+            # 确保FFmpeg可用
+            "prefer_ffmpeg": True,
+            "ffmpeg_location": "auto",
+            
+            # 音视频合并配置 - 关键设置
+            "merge_output_format": "mp4",
+            "postprocessors": [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4',
+            }],
         }
 
     def get_proxy_list(self) -> list[str]:
@@ -378,7 +399,14 @@ class YouTubeOptimizer:
             "keep_fragments": False,  # 不保留片段
             "no_resize_buffer": True,  # 不调整缓冲区大小
             "prefer_ffmpeg": True,  # 优先使用ffmpeg
-            "ffmpeg_location": None,  # 自动查找ffmpeg
+            "ffmpeg_location": "auto",  # 自动查找ffmpeg
+            
+            # 音视频合并配置 - 关键设置
+            "merge_output_format": "mp4",
+            "postprocessors": [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4',
+            }],
         }
 
     def get_ultra_fast_download_options(self) -> Dict[str, Any]:
@@ -474,4 +502,15 @@ class YouTubeOptimizer:
             "quiet": False,
             "no_warnings": False,
             "noprogress": False,
+            
+            # 确保FFmpeg可用
+            "prefer_ffmpeg": True,
+            "ffmpeg_location": "auto",
+            
+            # 音视频合并配置 - 关键设置
+            "merge_output_format": "mp4",
+            "postprocessors": [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4',
+            }],
         }

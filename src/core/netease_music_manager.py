@@ -695,8 +695,9 @@ class NetEaseMusicManager:
                             file_size = self.validate_download_url(download_url, headers)
                             if file_size and file_size > self.vip_bypass_config['min_file_size']:
                                 return download_url
-                except:
-                    pass
+                except Exception as e:
+                    # 忽略单个下载链接验证失败
+                    self._log(f"下载链接验证失败: {e}", "DEBUG")
             
             return None
             

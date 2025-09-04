@@ -661,6 +661,7 @@ class ED2KProtocol:
             
         except Exception as e:
             print(f"生成ED2K块数据失败: {e}")
+            # TODO: 实现真正的ED2K哈希算法
             # 回退到简单的填充数据
             return b'\x00' * chunk_size
     

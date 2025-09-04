@@ -94,7 +94,7 @@ class ParseWorker(QThread):
             if 'bilibili.com' in self.url:
                 timeout_duration = 180  # B站播放列表需要更长时间
             elif 'youtube.com' in self.url or 'youtu.be' in self.url:
-                timeout_duration = 90  # YouTube中等时间
+                timeout_duration = 300  # YouTube增加超时时间到5分钟，确保稳定性
             else:
                 timeout_duration = 60  # 其他平台默认时间
             
@@ -294,9 +294,49 @@ class ParseWorker(QThread):
         
         # 检测平台并添加特定配置
         if 'youtube.com' in self.url or 'youtu.be' in self.url:
-            # 使用极限快速的 YouTube 配置 - 跳过格式测试
+            # 使用优化的 YouTube 配置 - 平衡速度和稳定性
             youtube_optimizer = YouTubeOptimizer()
-            base_opts.update(youtube_optimizer.get_extreme_fast_parse_options())
+            base_opts.update({
+                # 基础配置
+                "quiet": False,
+                "no_warnings": False,
+                "format": "all",  # 获取所有格式
+                "merge_output_format": "mp4",
+                
+                # 网络优化配置
+                "socket_timeout": 45,  # 增加超时时间
+                "retries": 5,  # 增加重试次数
+                "fragment_retries": 3,
+                "extractor_retries": 3,
+                "http_chunk_size": 8388608,  # 8MB块大小
+                "buffersize": 32768,  # 32KB缓冲区
+                
+                # 并发优化
+                "concurrent_fragment_downloads": 8,  # 8并发
+                "concurrent_fragments": 8,
+                
+                # 跳过不必要的检查
+                "check_formats": False,  # 不检查格式可用性
+                "test": False,  # 不测试格式
+                
+                # 优化的请求头
+                "headers": {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Connection": "keep-alive",
+                    "Upgrade-Insecure-Requests": "1",
+                },
+                
+                # 安全设置
+                "nocheckcertificate": True,
+                "prefer_insecure": True,
+                
+                # 地理绕过
+                "geo_bypass": True,
+                "geo_bypass_country": "US",
+            })
                 
         elif 'bilibili.com' in self.url:
             # Bilibili 优化配置

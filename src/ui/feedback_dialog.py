@@ -279,8 +279,8 @@ class FeedbackDialog(QDialog):
         try:
             icon_path = "resources/LOGO.png"
             self.setWindowIcon(QIcon(icon_path))
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"设置窗口图标失败: {e}")
             
         # 主布局
         layout = QVBoxLayout()

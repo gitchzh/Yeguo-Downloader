@@ -760,13 +760,13 @@ class VideoDownloaderMethods:
             worker.finished.connect(self.on_parse_completed)  # 连接完成信号
             worker.error.connect(self.on_parse_error)
             
-            # 添加超时保护
-            def start_worker_with_timeout(w=worker):
-                w.start()
-            
-            # 延迟启动，避免同时启动多个线程
-            QTimer.singleShot(100 * len(self.parse_workers), start_worker_with_timeout)
+            # 立即启动工作线程，避免延迟导致的UI阻塞感
+            worker.start()
             self.parse_workers.append(worker)
+            
+            # 短暂延迟，避免同时启动过多线程
+            import time
+            time.sleep(0.05)  # 50毫秒延迟
 
     def on_parse_progress(self, current_progress: int, total_count: int) -> None:
         """处理解析进度更新"""
@@ -1873,9 +1873,6 @@ class VideoDownloaderMethods:
                 "prefer_insecure": True,  # 优先使用不安全的连接
                 "no_check_certificate": True,  # 不检查证书
                 
-                # 允许FFmpeg进行音视频合并
-                "merge_output_format": "mp4",  # 指定合并格式为mp4
-                
                 # 请求头配置
                 "headers": {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -1896,32 +1893,54 @@ class VideoDownloaderMethods:
             
             # 如果有特定的格式ID，使用它；否则使用best
             if format_id and format_id != "unknown":
-                # 允许使用合并格式，让FFmpeg包装器处理合并
-                format_spec = format_id
+                # 使用特定格式ID，但确保包含音频
+                format_spec = f"{format_id}+bestaudio/best"
                 logger.info(f"使用特定格式ID: {format_spec} (高度: {height})")
             else:
-                # 根据高度选择最佳格式
+                # 根据高度选择最佳格式，确保包含音频
                 if height >= 1080:
-                    format_spec = "best[height>=1080]/best"
+                    format_spec = "best[height>=1080]+bestaudio/best"
                 elif height >= 720:
-                    format_spec = "best[height>=720]/best"
+                    format_spec = "best[height>=720]+bestaudio/best"
                 elif height >= 480:
-                    format_spec = "best[height>=480]/best"
+                    format_spec = "best[height>=480]+bestaudio/best"
                 elif height >= 360:
-                    format_spec = "best[height>=360]/best"
+                    format_spec = "best[height>=360]+bestaudio/best"
                 else:
-                    format_spec = "best"
+                    format_spec = "best+bestaudio/best"
                 logger.info(f"使用高度匹配格式: {format_spec} (高度: {height})")
             
             # 记录最终的下载配置
             logger.info(f"最终下载配置: format={format_spec}, ffmpeg_location={self.ffmpeg_path}")
-            logger.info(f"FFmpeg禁用配置: postprocessors={ydl_opts.get('postprocessors')}, merge_output_format={ydl_opts.get('merge_output_format')}")
             
             ydl_opts.update({
-                "format": format_spec,
-                # 不指定合并格式，避免FFmpeg检查
-                # "merge_output_format": "mp4",
-            })
+            "format": format_spec,
+            # 确保FFmpeg进行音视频合并
+            "merge_output_format": "mp4",
+            "prefer_ffmpeg": True,
+            
+            # 添加后处理器配置，确保音视频正确合并
+            "postprocessors": [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4',
+            }],
+            
+            # 文件覆盖配置，避免同名文件导致下载失败
+            "overwrites": True,
+            "ignoreerrors": False,
+            
+            # 优化下载配置 - 适度并发，提高稳定性
+            "concurrent_fragment_downloads": 8,  # 减少并发，提高稳定性
+            "concurrent_fragments": 8,
+            "http_chunk_size": 8388608,  # 8MB块大小，平衡速度和稳定性
+            "buffersize": 32768,  # 32KB缓冲区
+            
+            # 网络优化 - 适度超时，提高成功率
+            "socket_timeout": 90,  # 适度超时时间
+            "retries": 8,  # 适度重试次数
+            "fragment_retries": 5,
+            "extractor_retries": 3,
+        })
 
             worker = DownloadWorker(url, ydl_opts, format_id)
             worker.progress_signal.connect(self.download_progress_hook)
@@ -1931,6 +1950,7 @@ class VideoDownloaderMethods:
             worker.start()
             self.download_workers.append(worker)
             self.active_downloads += 1
+            
         except Exception as e:
             logger.error(f"启动下载失败: {str(e)}", exc_info=True)
             self.update_status_bar(f"下载失败: {selected_format['description']} - {str(e)}", "", "")
@@ -4191,5 +4211,19 @@ class VideoDownloaderMethods:
             return False
 
 
+
+
+    def show_ed2k_server_manager_dialog(self) -> None:
+        """显示ED2K服务器管理对话框"""
+        try:
+            from .ed2k_server_manager_dialog import ED2KServerManagerDialog
+
+            dialog = ED2KServerManagerDialog(self)
+            dialog.exec_()
+            logger.info("ED2K服务器管理对话框已关闭")
+
+        except Exception as e:
+            logger.error(f"显示ED2K服务器管理对话框失败: {e}")
+            QMessageBox.critical(self, "错误", f"无法打开ED2K服务器管理: {e}")
 
 

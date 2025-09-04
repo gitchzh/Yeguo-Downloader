@@ -259,8 +259,8 @@ class ED2KDownloadWorker(QThread):
             if self.progress_timer:
                 try:
                     self.progress_timer.stop()
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"停止进度定时器失败: {e}")
     
     def _download_with_builtin(self):
         """使用内置下载器进行ED2K下载"""

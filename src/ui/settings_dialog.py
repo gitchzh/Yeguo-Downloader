@@ -884,3 +884,62 @@ class SettingsDialog(QDialog):
 
             "remember_window_position": self.remember_window_position.isChecked(),
         }
+    
+    def test_network_connection(self):
+        """测试网络连接"""
+        try:
+            from src.core.youtube_optimizer import YouTubeOptimizer
+            
+            self.network_test_button.setEnabled(False)
+            self.network_test_button.setText("测试中...")
+            self.network_status_label.setText("正在测试网络连接...")
+            
+            # 在后台线程中测试网络
+            import threading
+            def test_network():
+                try:
+                    optimizer = YouTubeOptimizer()
+                    result = optimizer.test_network_connectivity()
+                    
+                    # 在主线程中更新UI
+                    self.network_test_button.callOnClick = lambda: self._update_network_status(result)
+                    self.network_test_button.callOnClick()
+                    
+                except Exception as e:
+                    # 在主线程中显示错误
+                    self.network_test_button.callOnClick = lambda: self._show_network_error(str(e))
+                    self.network_test_button.callOnClick()
+            
+            thread = threading.Thread(target=test_network, daemon=True)
+            thread.start()
+            
+        except Exception as e:
+            self._show_network_error(str(e))
+    
+    def _update_network_status(self, result: dict):
+        """更新网络状态显示"""
+        self.network_test_button.setEnabled(True)
+        self.network_test_button.setText("测试网络连接")
+        
+        if result.get("success", False):
+            self.network_status_label.setText("✅ 网络连接正常")
+            self.network_status_label.setStyleSheet("color: #28a745; font-size: 10px;")
+        else:
+            status_text = "❌ 网络连接异常\n"
+            if result.get("suggestions"):
+                status_text += "\n".join(result["suggestions"])
+            
+            self.network_status_label.setText(status_text)
+            self.network_status_label.setStyleSheet("color: #dc3545; font-size: 10px;")
+            
+            # 如果检测到需要代理，启用代理设置
+            if result.get("proxy_needed", False):
+                self.proxy_enabled.setChecked(True)
+                self.proxy_url.setEnabled(True)
+    
+    def _show_network_error(self, error_msg: str):
+        """显示网络测试错误"""
+        self.network_test_button.setEnabled(True)
+        self.network_test_button.setText("测试网络连接")
+        self.network_status_label.setText(f"❌ 网络测试失败: {error_msg}")
+        self.network_status_label.setStyleSheet("color: #dc3545; font-size: 10px;")

@@ -211,7 +211,8 @@ class FFmpegManager:
                         version_line = result.stdout.split('\n')[0]
                         return version_line
             except Exception:
-                pass
+                # 忽略版本获取错误
+                logger.debug("无法获取FFmpeg版本信息")
         
         return self.ffmpeg_version
     
