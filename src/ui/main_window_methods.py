@@ -4104,110 +4104,60 @@ class VideoDownloaderMethods:
             logger.error(f"应用ED2K下载设置失败: {e}")
 
     def _init_ffmpeg_path(self) -> None:
-        """初始化FFmpeg路径"""
+        """初始化FFmpeg路径 - 使用库方式"""
         try:
-            # 尝试使用FFmpeg集成器
-            try:
-                from ..core.ffmpeg_integrator import ffmpeg_integrator
-                if ffmpeg_integrator.is_available():
-                    self.ffmpeg_path = ffmpeg_integrator.get_ffmpeg_path()
-                    logger.info(f"使用集成FFmpeg: {self.ffmpeg_path}")
-                    return
-            except ImportError:
-                logger.info("FFmpeg集成器不可用，使用传统检测方法")
+            # 使用新的FFmpeg管理器（优先使用yt-dlp内置处理）
+            from ..core.ffmpeg_manager import get_ffmpeg_manager
+            ffmpeg_manager = get_ffmpeg_manager()
             
-            # 回退到传统FFmpeg管理器
-            try:
-                from ..core.ffmpeg_manager import ffmpeg_manager
-                if ffmpeg_manager.is_available():
-                    self.ffmpeg_path = ffmpeg_manager.get_ffmpeg_path()
-                    logger.info(f"使用FFmpeg管理器: {self.ffmpeg_path}")
-                    return
-            except ImportError:
-                logger.warning("FFmpeg管理器不可用")
-            
-            # 最后尝试系统PATH
-            import shutil
-            if shutil.which("ffmpeg"):
-                self.ffmpeg_path = shutil.which("ffmpeg")
-                logger.info(f"使用系统PATH中的FFmpeg: {self.ffmpeg_path}")
+            if ffmpeg_manager.is_available():
+                self.ffmpeg_path = ffmpeg_manager.get_ffmpeg_location()
+                logger.info(f"使用FFmpeg管理器: {self.ffmpeg_path}")
+                
+                # 获取FFmpeg配置选项
+                ffmpeg_options = ffmpeg_manager.get_ffmpeg_options()
+                logger.info(f"FFmpeg配置: {ffmpeg_options}")
                 return
-            
-            logger.warning("未找到可用的FFmpeg，某些功能可能受限")
-            
+            else:
+                logger.warning("FFmpeg管理器不可用，某些功能可能受限")
+                
         except Exception as e:
             logger.error(f"初始化FFmpeg路径失败: {e}")
+            # 设置默认值，使用yt-dlp内置处理
+            self.ffmpeg_path = "auto"
     
     def get_ffmpeg_status(self) -> Dict[str, Any]:
-        """获取FFmpeg状态信息"""
+        """获取FFmpeg状态信息 - 使用库方式"""
         try:
-            status = {
-                "available": False,
-                "path": None,
-                "method": "none",
-                "version": None
-            }
+            # 使用新的FFmpeg管理器
+            from ..core.ffmpeg_manager import get_ffmpeg_manager
+            ffmpeg_manager = get_ffmpeg_manager()
             
-            # 尝试从集成器获取状态
-            try:
-                from ..core.ffmpeg_integrator import ffmpeg_integrator
-                if ffmpeg_integrator.is_available():
-                    integrator_status = ffmpeg_integrator.get_installation_status()
-                    status.update(integrator_status)
-                    return status
-            except ImportError:
-                pass
-            
-            # 尝试从管理器获取状态
-            try:
-                from ..core.ffmpeg_manager import ffmpeg_manager
-                if ffmpeg_manager.is_available():
-                    manager_status = ffmpeg_manager.get_installation_status()
-                    status.update(manager_status)
-                    return status
-            except ImportError:
-                pass
-            
-            # 基本状态
-            status["available"] = bool(self.ffmpeg_path)
-            status["path"] = self.ffmpeg_path
-            
-            return status
-            
+            if ffmpeg_manager.is_available():
+                status = ffmpeg_manager.get_info()
+                return status
+            else:
+                return {
+                    "available": False,
+                    "path": None,
+                    "type": "none",
+                    "version": None
+                }
+                
         except Exception as e:
             logger.error(f"获取FFmpeg状态失败: {e}")
-            return {"available": False, "path": None, "method": "error", "version": None}
+            return {"available": False, "path": None, "type": "error", "version": None}
     
     def force_reinstall_ffmpeg(self) -> bool:
-        """强制重新安装FFmpeg"""
+        """重新检测FFmpeg - 使用库方式"""
         try:
-            # 尝试使用集成器重新安装
-            try:
-                from ..core.ffmpeg_integrator import ffmpeg_integrator
-                if ffmpeg_integrator.force_reinstall():
-                    # 重新初始化FFmpeg路径
-                    self._init_ffmpeg_path()
-                    logger.info("FFmpeg重新安装成功")
-                    return True
-            except ImportError:
-                pass
-            
-            # 尝试使用管理器重新安装
-            try:
-                from ..core.ffmpeg_manager import ffmpeg_manager
-                if ffmpeg_manager.force_reinstall():
-                    # 重新初始化FFmpeg路径
-                    self._init_ffmpeg_path()
-                    logger.info("FFmpeg重新安装成功")
-                    return True
-            except ImportError:
-                pass
-            
-            logger.warning("无法重新安装FFmpeg")
-            return False
+            # 重新初始化FFmpeg路径
+            self._init_ffmpeg_path()
+            logger.info("FFmpeg重新检测成功")
+            return True
             
         except Exception as e:
-            logger.error(f"强制重新安装FFmpeg失败: {e}")
+            logger.error(f"重新检测FFmpeg失败: {e}")
             return False
 
 

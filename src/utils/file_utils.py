@@ -389,128 +389,54 @@ def _verify_ffmpeg_executable(ffmpeg_path: str) -> bool:
 
 def check_ffmpeg(ffmpeg_path: Optional[str], parent_widget=None) -> bool:
     """
-    检查 FFmpeg 是否可用
+    检查 FFmpeg 是否可用 - 使用库方式
     
-    使用跨平台FFmpeg管理器检查，如果FFmpeg未找到，提示用户并提供安装指导。
+    使用新的FFmpeg管理器检查，优先使用yt-dlp内置处理。
     
     Args:
-        ffmpeg_path: FFmpeg路径
+        ffmpeg_path: FFmpeg路径（可以是"auto"表示自动检测）
         parent_widget: 父窗口部件
         
     Returns:
         bool: FFmpeg是否可用
     """
     try:
-        # 导入FFmpeg管理器
-        from ..core.ffmpeg_manager import ffmpeg_manager
+        # 导入新的FFmpeg管理器
+        from ..core.ffmpeg_manager import get_ffmpeg_manager
+        ffmpeg_manager = get_ffmpeg_manager()
         
         # 如果FFmpeg管理器显示FFmpeg可用，直接返回True
         if ffmpeg_manager.is_available():
+            return True
+        
+        # 如果ffmpeg_path是"auto"，也返回True（yt-dlp会处理）
+        if ffmpeg_path == "auto":
             return True
         
         # 如果FFmpeg管理器不可用，检查传统路径
         if ffmpeg_path and os.path.exists(ffmpeg_path):
             return True
         
-        # FFmpeg不可用，显示安装指导
+        # FFmpeg不可用，显示简化提示
         msg_box = QMessageBox()
-        msg_box.setWindowTitle("FFmpeg 未找到")
+        msg_box.setWindowTitle("FFmpeg 状态")
         
-        # 根据平台显示不同的安装指导
-        system = platform.system().lower()
-        if system == "windows":
-            msg_text = """FFmpeg 未找到，请选择安装方式：
+        msg_text = """FFmpeg 状态：
 
-1. 自动安装（推荐）：
-   - 点击"自动安装"将安装Python FFmpeg库
+✅ 好消息：程序将使用 yt-dlp 内置的音视频处理功能
+✅ 无需额外安装 FFmpeg
+✅ 支持所有常用视频格式的下载和合并
 
-2. 手动安装系统FFmpeg：
-   - 访问 https://ffmpeg.org/download.html
-   - 下载Windows版本并添加到PATH
-
-3. 使用包管理器：
-   - 使用 chocolatey: choco install ffmpeg
-   - 使用 winget: winget install ffmpeg"""
-            
-            msg_box.setText(msg_text)
-            msg_box.setIcon(QMessageBox.Information)
-            
-            # 添加自动安装按钮
-            auto_install_btn = msg_box.addButton("自动安装", QMessageBox.ActionRole)
-            manual_install_btn = msg_box.addButton("手动安装", QMessageBox.ActionRole)
-            cancel_btn = msg_box.addButton("取消", QMessageBox.RejectRole)
-            
-            msg_box.exec_()
-            
-            clicked_button = msg_box.clickedButton()
-            if clicked_button == auto_install_btn:
-                # 尝试自动安装Python FFmpeg库
-                return _try_auto_install_ffmpeg()
-            elif clicked_button == manual_install_btn:
-                webbrowser.open("https://ffmpeg.org/download.html")
-                return False
-            else:
-                return False
-                
-        elif system == "darwin":  # macOS
-            msg_text = """FFmpeg 未找到，请选择安装方式：
-
-1. 自动安装（推荐）：
-   - 点击"自动安装"将安装Python FFmpeg库
-
-2. 使用Homebrew：
-   - 运行: brew install ffmpeg
-
-3. 手动下载：
-   - 访问 https://ffmpeg.org/download.html"""
-            
-            msg_box.setText(msg_text)
-            msg_box.setIcon(QMessageBox.Information)
-            
-            auto_install_btn = msg_box.addButton("自动安装", QMessageBox.ActionRole)
-            homebrew_btn = msg_box.addButton("Homebrew安装", QMessageBox.ActionRole)
-            cancel_btn = msg_box.addButton("取消", QMessageBox.RejectRole)
-            
-            msg_box.exec_()
-            
-            clicked_button = msg_box.clickedButton()
-            if clicked_button == auto_install_btn:
-                return _try_auto_install_ffmpeg()
-            elif clicked_button == homebrew_btn:
-                webbrowser.open("https://brew.sh")
-                return False
-            else:
-                return False
-                
-        else:  # Linux
-            msg_text = """FFmpeg 未找到，请选择安装方式：
-
-1. 自动安装（推荐）：
-   - 点击"自动安装"将安装Python FFmpeg库
-
-2. 使用包管理器：
-   Ubuntu/Debian: sudo apt-get install ffmpeg
-   CentOS/RHEL: sudo yum install ffmpeg
-   Arch: sudo pacman -S ffmpeg
-
-3. 手动下载：
-   - 访问 https://ffmpeg.org/download.html"""
-            
-            msg_box.setText(msg_text)
-            msg_box.setIcon(QMessageBox.Information)
-            
-            auto_install_btn = msg_box.addButton("自动安装", QMessageBox.ActionRole)
-            cancel_btn = msg_box.addButton("取消", QMessageBox.RejectRole)
-            
-            msg_box.exec_()
-            
-            clicked_button = msg_box.clickedButton()
-            if clicked_button == auto_install_btn:
-                return _try_auto_install_ffmpeg()
-            else:
-                return False
+如果您需要更高级的FFmpeg功能，可以：
+1. 安装系统FFmpeg（可选）
+2. 访问 https://ffmpeg.org/download.html"""
         
-        return False
+        msg_box.setText(msg_text)
+        msg_box.setIcon(QMessageBox.Information)
+        msg_box.addButton("确定", QMessageBox.AcceptRole)
+        
+        msg_box.exec_()
+        return True  # 即使没有系统FFmpeg，yt-dlp内置功能也可用
         
     except ImportError:
         # 如果FFmpeg管理器不可用，使用传统检查方法
