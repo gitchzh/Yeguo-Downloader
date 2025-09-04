@@ -139,6 +139,13 @@ class ED2KDownloadWorker(QThread):
     
     def _detect_ed2k_tool(self):
         """检测系统中可用的ED2K下载工具"""
+        # 优先使用内置aMule
+        self.tool_name = "内置aMule"
+        self.tool_path = "builtin"
+        logger.info("使用内置aMule进行ED2K下载")
+        return
+        
+        # 以下是外部工具检测逻辑（暂时不使用）
         system = platform.system().lower()
         
         # 按优先级检测工具
@@ -242,7 +249,9 @@ class ED2KDownloadWorker(QThread):
         except Exception as e:
             error_msg = f"ED2K下载失败: {str(e)}"
             logger.error(error_msg)
-            self.download_error.emit(self.filename, error_msg)
+            # 只有在非暂停状态下才发送错误信号
+            if not self.is_paused:
+                self.download_error.emit(self.filename, error_msg)
         finally:
             self.mutex.lock()
             self.is_running = False

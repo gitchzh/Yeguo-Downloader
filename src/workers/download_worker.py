@@ -149,10 +149,26 @@ class DownloadWorker(QThread):
                 else:
                     self._download_general()
                 
-        except Exception as e:
-            error_msg = str(e)
+        except requests.RequestException as e:
+            error_msg = f"网络请求错误: {e}"
             self.log_signal.emit(f"❌ 下载失败: {error_msg}")
-            if not self._is_cancelled:
+            if not self._is_cancelled and not self._is_paused:
+                self.error.emit(error_msg)
+        except ValueError as e:
+            error_msg = f"数据解析错误: {e}"
+            self.log_signal.emit(f"❌ 下载失败: {error_msg}")
+            if not self._is_cancelled and not self._is_paused:
+                self.error.emit(error_msg)
+        except OSError as e:
+            error_msg = f"文件系统错误: {e}"
+            self.log_signal.emit(f"❌ 下载失败: {error_msg}")
+            if not self._is_cancelled and not self._is_paused:
+                self.error.emit(error_msg)
+        except Exception as e:
+            error_msg = f"未知错误: {e}"
+            self.log_signal.emit(f"❌ 下载失败: {error_msg}")
+            logger.error(f"下载失败详情: {e}", exc_info=True)
+            if not self._is_cancelled and not self._is_paused:
                 self.error.emit(error_msg)
     
     def _download_netease_music(self):
@@ -218,14 +234,24 @@ class DownloadWorker(QThread):
                                                 self.log_signal.emit(f"VIP绕过失败，文件太小: {file_size}字节")
                                         else:
                                             self.log_signal.emit("VIP绕过失败，无法获取文件大小")
+                                except requests.RequestException as e:
+                                    self.log_signal.emit(f"VIP绕过验证失败 - 网络请求错误: {e}")
+                                except ValueError as e:
+                                    self.log_signal.emit(f"VIP绕过验证失败 - 数据解析错误: {e}")
                                 except Exception as e:
-                                    self.log_signal.emit(f"VIP绕过验证失败: {e}")
+                                    self.log_signal.emit(f"VIP绕过验证失败 - 未知错误: {e}")
+                                    logger.error(f"VIP绕过验证失败详情: {e}", exc_info=True)
                             else:
                                 self.log_signal.emit("VIP绕过失败，重定向到无效页面")
                         else:
-                            self.log_signal.emit(f"VIP绕过失败，请求失败: {response.status_code}")
+                            self.log_signal.emit(f"VIP绕过失败，请求失败: HTTP {response.status_code}")
+                except requests.RequestException as e:
+                    self.log_signal.emit(f"VIP绕过尝试失败 - 网络请求错误: {e}")
+                except ValueError as e:
+                    self.log_signal.emit(f"VIP绕过尝试失败 - 数据解析错误: {e}")
                 except Exception as e:
-                    self.log_signal.emit(f"VIP绕过尝试失败: {e}")
+                    self.log_signal.emit(f"VIP绕过尝试失败 - 未知错误: {e}")
+                    logger.error(f"VIP绕过尝试失败详情: {e}", exc_info=True)
             
             # 如果VIP绕过失败，继续使用原来的方法
             self.log_signal.emit("VIP绕过失败，使用传统下载方法...")

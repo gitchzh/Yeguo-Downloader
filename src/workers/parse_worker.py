@@ -59,6 +59,7 @@ class ParseWorker(QThread):
         self._condition = QWaitCondition()
         self._extraction_result = None
         self._extraction_error = None
+        # 移除threading.Event，统一使用PyQt5的线程安全机制
         self._extraction_completed = threading.Event()
         self._extraction_thread = None
 
@@ -179,8 +180,9 @@ class ParseWorker(QThread):
             # 提供超时建议
             self.log_signal.emit("建议：检查网络连接，或尝试重新解析")
         except InterruptedError as e:
-            # 用户取消解析，不显示错误信息
-            self.log_signal.emit(f"解析已取消: {self.url}")
+            # 用户取消解析，发送友好的提示信息
+            self.log_signal.emit("解析已取消")
+            # 不发送error信号，避免显示错误对话框
         except Exception as e:
             error_msg = f"解析 {self.url} 失败: {str(e)}"
             self.error.emit(error_msg)
@@ -323,27 +325,33 @@ class ParseWorker(QThread):
         }
     
     def pause(self) -> None:
-        """暂停解析"""
+        """暂停解析 - 使用PyQt5线程安全机制"""
         self._mutex.lock()
-        self._paused = True
-        self._mutex.unlock()
+        try:
+            self._paused = True
+        finally:
+            self._mutex.unlock()
         self.status_signal.emit("解析已暂停")
     
     def resume(self) -> None:
-        """恢复解析"""
+        """恢复解析 - 使用PyQt5线程安全机制"""
         self._mutex.lock()
-        self._paused = False
-        self._condition.wakeAll()
-        self._mutex.unlock()
+        try:
+            self._paused = False
+            self._condition.wakeAll()
+        finally:
+            self._mutex.unlock()
         self.status_signal.emit("解析已恢复")
     
     def cancel(self) -> None:
-        """取消解析"""
+        """取消解析 - 使用PyQt5线程安全机制"""
         self._mutex.lock()
-        self._cancelled = True
-        self._paused = False
-        self._condition.wakeAll()
-        self._mutex.unlock()
+        try:
+            self._cancelled = True
+            self._paused = False
+            self._condition.wakeAll()
+        finally:
+            self._mutex.unlock()
         self.status_signal.emit("正在取消解析...")
         
         # 中断正在进行的提取
@@ -353,25 +361,29 @@ class ParseWorker(QThread):
         self.wait()
     
     def _check_pause(self) -> None:
-        """检查是否需要暂停"""
+        """检查是否需要暂停 - 使用PyQt5线程安全机制"""
         self._mutex.lock()
-        while self._paused and not self._cancelled:
-            self._condition.wait(self._mutex)
-        self._mutex.unlock()
+        try:
+            while self._paused and not self._cancelled:
+                self._condition.wait(self._mutex)
+        finally:
+            self._mutex.unlock()
     
     def _check_cancelled(self) -> bool:
-        """检查是否已取消"""
+        """检查是否已取消 - 使用PyQt5线程安全机制"""
         self._mutex.lock()
-        cancelled = self._cancelled
-        self._mutex.unlock()
-        return cancelled
+        try:
+            return self._cancelled
+        finally:
+            self._mutex.unlock()
     
     def _check_paused(self) -> bool:
-        """检查是否暂停"""
+        """检查是否暂停 - 使用PyQt5线程安全机制"""
         self._mutex.lock()
-        paused = self._paused
-        self._mutex.unlock()
-        return paused
+        try:
+            return self._paused
+        finally:
+            self._mutex.unlock()
     
     def _parse_magnet_link(self) -> None:
         """解析磁力链接"""

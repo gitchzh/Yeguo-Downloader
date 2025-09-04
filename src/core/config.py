@@ -11,7 +11,7 @@
 - Config: 应用程序全局配置类
 
 作者: 椰果IDM开发团队
-版本: 1.0.2
+版本: 1.5.0
 """
 
 from typing import Optional
@@ -52,10 +52,26 @@ class Config:
     MAX_RETRY_ATTEMPTS = 3  # 最大重试次数
     RETRY_DELAY = 2  # 重试延迟（秒）
     
-    # 超时配置
+    # 超时配置 - 改进版本
     DEFAULT_TIMEOUT = 60  # 默认超时时间（秒）
     YOUTUBE_TIMEOUT = 90  # YouTube超时时间（秒）
     BILIBILI_TIMEOUT = 180  # B站超时时间（秒）
+    
+    # 网络超时配置
+    NETWORK_TIMEOUTS = {
+        'socket_timeout': 30,        # Socket超时（秒）
+        'connect_timeout': 15,       # 连接超时（秒）
+        'read_timeout': 60,          # 读取超时（秒）
+        'write_timeout': 60,         # 写入超时（秒）
+        'retry_timeout': 5,          # 重试间隔（秒）
+        'max_retry_timeout': 300,    # 最大重试超时（秒）
+    }
+    
+    # 智能超时配置
+    SMART_TIMEOUT_ENABLED = True    # 是否启用智能超时
+    TIMEOUT_ADAPTATION_FACTOR = 1.5 # 超时自适应因子
+    MIN_TIMEOUT = 5                 # 最小超时时间（秒）
+    MAX_TIMEOUT = 600               # 最大超时时间（秒）
     
     # 磁力下载配置
     MAGNET_DOWNLOAD_ENABLED = True  # 是否启用磁力下载
@@ -83,31 +99,125 @@ class Config:
 
     
     @classmethod
-    def validate_config(cls) -> bool:
-        """验证配置参数的有效性"""
+    def validate_config(cls) -> tuple[bool, list[str]]:
+        """
+        验证配置参数的有效性 - 改进版本
+        
+        Returns:
+            tuple[bool, list[str]]: (是否有效, 错误信息列表)
+        """
+        errors = []
+        
         try:
             # 验证数值配置
             if cls.MAX_CONCURRENT_DOWNLOADS <= 0:
-                return False
-            if cls.CACHE_LIMIT <= 0:
-                return False
-            if cls.MEMORY_WARNING_THRESHOLD <= 0:
-                return False
-            if cls.MEMORY_CRITICAL_THRESHOLD <= cls.MEMORY_WARNING_THRESHOLD:
-                return False
-            if cls.MAX_FILENAME_LENGTH <= 0:
-                return False
-            if cls.MAX_THREAD_WAIT_TIME <= 0:
-                return False
-            if cls.THREAD_CLEANUP_INTERVAL <= 0:
-                return False
-            if cls.MAX_RETRY_ATTEMPTS <= 0:
-                return False
-            if cls.RETRY_DELAY < 0:
-                return False
-            if cls.DEFAULT_TIMEOUT <= 0:
-                return False
+                errors.append(f"MAX_CONCURRENT_DOWNLOADS 必须大于0，当前值: {cls.MAX_CONCURRENT_DOWNLOADS}")
+            elif cls.MAX_CONCURRENT_DOWNLOADS > 10:
+                errors.append(f"MAX_CONCURRENT_DOWNLOADS 建议不超过10，当前值: {cls.MAX_CONCURRENT_DOWNLOADS}")
             
-            return True
-        except Exception:
-            return False
+            if cls.CACHE_LIMIT <= 0:
+                errors.append(f"CACHE_LIMIT 必须大于0，当前值: {cls.CACHE_LIMIT}")
+            elif cls.CACHE_LIMIT > 100:
+                errors.append(f"CACHE_LIMIT 建议不超过100，当前值: {cls.CACHE_LIMIT}")
+            
+            if cls.MEMORY_WARNING_THRESHOLD <= 0:
+                errors.append(f"MEMORY_WARNING_THRESHOLD 必须大于0，当前值: {cls.MEMORY_WARNING_THRESHOLD}")
+            elif cls.MEMORY_WARNING_THRESHOLD > 2000:
+                errors.append(f"MEMORY_WARNING_THRESHOLD 建议不超过2000MB，当前值: {cls.MEMORY_WARNING_THRESHOLD}")
+            
+            if cls.MEMORY_CRITICAL_THRESHOLD <= 0:
+                errors.append(f"MEMORY_CRITICAL_THRESHOLD 必须大于0，当前值: {cls.MEMORY_CRITICAL_THRESHOLD}")
+            elif cls.MEMORY_CRITICAL_THRESHOLD > 5000:
+                errors.append(f"MEMORY_CRITICAL_THRESHOLD 建议不超过5000MB，当前值: {cls.MEMORY_CRITICAL_THRESHOLD}")
+            
+            if cls.MEMORY_CRITICAL_THRESHOLD <= cls.MEMORY_WARNING_THRESHOLD:
+                errors.append(f"MEMORY_CRITICAL_THRESHOLD ({cls.MEMORY_CRITICAL_THRESHOLD}) 必须大于 MEMORY_WARNING_THRESHOLD ({cls.MEMORY_WARNING_THRESHOLD})")
+            
+            if cls.MAX_FILENAME_LENGTH <= 0:
+                errors.append(f"MAX_FILENAME_LENGTH 必须大于0，当前值: {cls.MAX_FILENAME_LENGTH}")
+            elif cls.MAX_FILENAME_LENGTH > 500:
+                errors.append(f"MAX_FILENAME_LENGTH 建议不超过500，当前值: {cls.MAX_FILENAME_LENGTH}")
+            
+            if cls.MAX_THREAD_WAIT_TIME <= 0:
+                errors.append(f"MAX_THREAD_WAIT_TIME 必须大于0，当前值: {cls.MAX_THREAD_WAIT_TIME}")
+            elif cls.MAX_THREAD_WAIT_TIME > 300:
+                errors.append(f"MAX_THREAD_WAIT_TIME 建议不超过300秒，当前值: {cls.MAX_THREAD_WAIT_TIME}")
+            
+            if cls.THREAD_CLEANUP_INTERVAL <= 0:
+                errors.append(f"THREAD_CLEANUP_INTERVAL 必须大于0，当前值: {cls.THREAD_CLEANUP_INTERVAL}")
+            elif cls.THREAD_CLEANUP_INTERVAL > 600:
+                errors.append(f"THREAD_CLEANUP_INTERVAL 建议不超过600秒，当前值: {cls.THREAD_CLEANUP_INTERVAL}")
+            
+            if cls.MAX_RETRY_ATTEMPTS <= 0:
+                errors.append(f"MAX_RETRY_ATTEMPTS 必须大于0，当前值: {cls.MAX_RETRY_ATTEMPTS}")
+            elif cls.MAX_RETRY_ATTEMPTS > 10:
+                errors.append(f"MAX_RETRY_ATTEMPTS 建议不超过10，当前值: {cls.MAX_RETRY_ATTEMPTS}")
+            
+            if cls.RETRY_DELAY < 0:
+                errors.append(f"RETRY_DELAY 不能为负数，当前值: {cls.RETRY_DELAY}")
+            elif cls.RETRY_DELAY > 60:
+                errors.append(f"RETRY_DELAY 建议不超过60秒，当前值: {cls.RETRY_DELAY}")
+            
+            if cls.DEFAULT_TIMEOUT <= 0:
+                errors.append(f"DEFAULT_TIMEOUT 必须大于0，当前值: {cls.DEFAULT_TIMEOUT}")
+            elif cls.DEFAULT_TIMEOUT > 600:
+                errors.append(f"DEFAULT_TIMEOUT 建议不超过600秒，当前值: {cls.DEFAULT_TIMEOUT}")
+            
+            # 验证磁力下载配置
+            if cls.MAGNET_MAX_CONNECTIONS <= 0:
+                errors.append(f"MAGNET_MAX_CONNECTIONS 必须大于0，当前值: {cls.MAGNET_MAX_CONNECTIONS}")
+            elif cls.MAGNET_MAX_CONNECTIONS > 1000:
+                errors.append(f"MAGNET_MAX_CONNECTIONS 建议不超过1000，当前值: {cls.MAGNET_MAX_CONNECTIONS}")
+            
+            if cls.MAGNET_DOWNLOAD_TIMEOUT <= 0:
+                errors.append(f"MAGNET_DOWNLOAD_TIMEOUT 必须大于0，当前值: {cls.MAGNET_DOWNLOAD_TIMEOUT}")
+            elif cls.MAGNET_DOWNLOAD_TIMEOUT > 1800:
+                errors.append(f"MAGNET_DOWNLOAD_TIMEOUT 建议不超过1800秒，当前值: {cls.MAGNET_DOWNLOAD_TIMEOUT}")
+            
+            # 验证ED2K下载配置
+            if cls.ED2K_MAX_CONNECTIONS <= 0:
+                errors.append(f"ED2K_MAX_CONNECTIONS 必须大于0，当前值: {cls.ED2K_MAX_CONNECTIONS}")
+            elif cls.ED2K_MAX_CONNECTIONS > 200:
+                errors.append(f"ED2K_MAX_CONNECTIONS 建议不超过200，当前值: {cls.ED2K_MAX_CONNECTIONS}")
+            
+            if cls.ED2K_DOWNLOAD_TIMEOUT <= 0:
+                errors.append(f"ED2K_DOWNLOAD_TIMEOUT 必须大于0，当前值: {cls.ED2K_DOWNLOAD_TIMEOUT}")
+            elif cls.ED2K_DOWNLOAD_TIMEOUT > 1800:
+                errors.append(f"ED2K_DOWNLOAD_TIMEOUT 建议不超过1800秒，当前值: {cls.ED2K_DOWNLOAD_TIMEOUT}")
+            
+            # 验证版本号格式
+            if not cls.APP_VERSION or not isinstance(cls.APP_VERSION, str):
+                errors.append("APP_VERSION 必须是有效的版本号字符串")
+            elif not cls.APP_VERSION.replace('.', '').replace('v', '').isdigit():
+                errors.append(f"APP_VERSION 格式无效: {cls.APP_VERSION}")
+            
+            return len(errors) == 0, errors
+            
+        except Exception as e:
+            errors.append(f"配置验证过程中发生异常: {e}")
+            return False, errors
+    
+    @classmethod
+    def get_config_summary(cls) -> dict:
+        """
+        获取配置摘要信息
+        
+        Returns:
+            dict: 配置摘要
+        """
+        return {
+            "version": cls.APP_VERSION,
+            "max_concurrent_downloads": cls.MAX_CONCURRENT_DOWNLOADS,
+            "cache_limit": cls.CACHE_LIMIT,
+            "memory_warning_threshold_mb": cls.MEMORY_WARNING_THRESHOLD,
+            "memory_critical_threshold_mb": cls.MEMORY_CRITICAL_THRESHOLD,
+            "max_filename_length": cls.MAX_FILENAME_LENGTH,
+            "max_thread_wait_time": cls.MAX_THREAD_WAIT_TIME,
+            "thread_cleanup_interval": cls.THREAD_CLEANUP_INTERVAL,
+            "max_retry_attempts": cls.MAX_RETRY_ATTEMPTS,
+            "retry_delay": cls.RETRY_DELAY,
+            "default_timeout": cls.DEFAULT_TIMEOUT,
+            "magnet_enabled": cls.MAGNET_DOWNLOAD_ENABLED,
+            "ed2k_enabled": cls.ED2K_DOWNLOAD_ENABLED,
+            "startup_show_warnings": cls.STARTUP_SHOW_WARNINGS
+        }

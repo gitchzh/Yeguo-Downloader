@@ -189,6 +189,10 @@ class VideoDownloaderMethods:
         self._last_memory_check = time.time()
         self._memory_check_interval = 30  # 30秒检查一次内存
     
+        # 初始化FFmpeg路径
+        self.ffmpeg_path = None
+        self._init_ffmpeg_path()
+    
     def load_settings(self) -> None:
         """加载保存的设置"""
         self.save_path = self.settings.value("save_path", os.getcwd())
@@ -387,21 +391,33 @@ class VideoDownloaderMethods:
             self._handle_single_video_parsing(single_video_urls)
     
     def _handle_playlist_parsing(self, playlist_urls: List[str]) -> None:
-        """处理播放列表解析"""
-        for url in playlist_urls:
-            # 获取播放列表信息
-            playlist_info = playlist_manager.get_playlist_info(url)
-            if not playlist_info:
-                logger.error(f"无法获取播放列表信息: {url}")
-                continue
-            
-            # 显示播放列表信息对话框
-            reply = self._show_playlist_info_dialog(playlist_info)
-            if reply == QMessageBox.Yes:
-                # 获取播放列表中的视频URL
-                video_urls = playlist_manager.get_playlist_video_urls(url)
-                if video_urls:
-                    self._parse_video_urls(video_urls)
+        """处理播放列表解析 - 改进版本，避免UI阻塞"""
+        try:
+            for i, url in enumerate(playlist_urls):
+                # 更新状态，避免UI冻结
+                self.update_status_bar(f"正在处理播放列表 {i+1}/{len(playlist_urls)}", "", "")
+                QApplication.processEvents()  # 处理UI事件，避免阻塞
+                
+                # 获取播放列表信息
+                playlist_info = playlist_manager.get_playlist_info(url)
+                if not playlist_info:
+                    logger.error(f"无法获取播放列表信息: {url}")
+                    continue
+                
+                # 显示播放列表信息对话框
+                reply = self._show_playlist_info_dialog(playlist_info)
+                if reply == QMessageBox.Yes:
+                    # 获取播放列表中的视频URL
+                    video_urls = playlist_manager.get_playlist_video_urls(url)
+                    if video_urls:
+                        self._parse_video_urls(video_urls)
+                        
+                # 短暂延迟，让UI响应
+                time.sleep(0.1)
+                
+        except Exception as e:
+            logger.error(f"处理播放列表解析失败: {e}")
+            QMessageBox.critical(self, "错误", f"播放列表解析失败: {str(e)}")
     
     def _show_playlist_info_dialog(self, playlist_info) -> int:
         """显示播放列表信息对话框"""
@@ -1590,14 +1606,46 @@ class VideoDownloaderMethods:
                     worker.cancel()
 
             self.reset_parse_state()
-            logger.info("解析已取消")
+            logger.info("用户取消了解析操作")
             self.update_status_bar("解析已取消", "", "")
+            # 显示友好的取消提示
+            self.status_scroll_label.setText("解析已取消")
     
     def reset_parse_state(self) -> None:
         """重置解析状态"""
         self.is_parsing = False
+        
+        # 先断开所有解析工作线程的信号连接，避免残留信号
+        for worker in self.parse_workers:
+            try:
+                if worker.isRunning():
+                    worker.cancel()
+                # 断开所有信号连接
+                worker.status_signal.disconnect()
+                worker.log_signal.disconnect()
+                worker.progress_signal.disconnect()
+                worker.video_parsed_signal.disconnect()
+                worker.finished.disconnect()
+                worker.error.disconnect()
+            except Exception as e:
+                # 忽略断开连接时的错误（可能已经断开）
+                logger.debug(f"断开解析工作线程信号连接时出错: {e}")
+        
+        # 清理网易云音乐解析工作线程的信号连接
+        for worker in self.netease_music_workers:
+            try:
+                if worker.isRunning():
+                    worker.cancel()
+                # 断开所有信号连接
+                worker.music_parsed_signal.disconnect()
+                worker.error_signal.disconnect()
+                worker.finished_signal.disconnect()
+            except Exception as e:
+                # 忽略断开连接时的错误（可能已经断开）
+                logger.debug(f"断开网易云音乐解析工作线程信号连接时出错: {e}")
+        
+        # 清空工作线程列表
         self.parse_workers.clear()
-        # 清理网易云音乐解析工作线程
         self.netease_music_workers.clear()
 
         self.smart_parse_button.setText("解析")
@@ -1607,6 +1655,14 @@ class VideoDownloaderMethods:
 
     def on_parse_error(self, error_msg: str) -> None:
         """处理解析错误"""
+        # 检查是否为取消操作
+        if "解析已取消" in error_msg or "InterruptedError" in error_msg:
+            # 用户取消解析，不显示错误对话框，只记录日志
+            logger.info(f"用户取消解析: {error_msg}")
+            self.update_status_bar("解析已取消", "", "")
+            self.reset_parse_state()
+            return
+        
         # 检查是否为超时错误
         if "timeout" in error_msg.lower() or "超时" in error_msg:
             detailed_error = f"解析超时: {error_msg}\n\n建议:\n1. 检查网络连接\n2. 尝试重新解析\n3. 检查视频链接是否有效"
@@ -3746,6 +3802,11 @@ class VideoDownloaderMethods:
             filename = f"{file_name}_{file_hash[:8]}.ed2k"
             output_file = os.path.join(self.save_path, filename)
             
+            # 确保selected_format包含正确的键名
+            selected_format['filename'] = file_name
+            selected_format['filesize'] = selected_format.get('filesize', 0)
+            selected_format['hash'] = file_hash
+            
             self.download_progress[output_file] = (0, "ED2K下载中...")
             logger.info(f"开始ED2K下载: {filename}")
             
@@ -4021,6 +4082,113 @@ class VideoDownloaderMethods:
             
         except Exception as e:
             logger.error(f"应用ED2K下载设置失败: {e}")
+
+    def _init_ffmpeg_path(self) -> None:
+        """初始化FFmpeg路径"""
+        try:
+            # 尝试使用FFmpeg集成器
+            try:
+                from ..core.ffmpeg_integrator import ffmpeg_integrator
+                if ffmpeg_integrator.is_available():
+                    self.ffmpeg_path = ffmpeg_integrator.get_ffmpeg_path()
+                    logger.info(f"使用集成FFmpeg: {self.ffmpeg_path}")
+                    return
+            except ImportError:
+                logger.info("FFmpeg集成器不可用，使用传统检测方法")
+            
+            # 回退到传统FFmpeg管理器
+            try:
+                from ..core.ffmpeg_manager import ffmpeg_manager
+                if ffmpeg_manager.is_available():
+                    self.ffmpeg_path = ffmpeg_manager.get_ffmpeg_path()
+                    logger.info(f"使用FFmpeg管理器: {self.ffmpeg_path}")
+                    return
+            except ImportError:
+                logger.warning("FFmpeg管理器不可用")
+            
+            # 最后尝试系统PATH
+            import shutil
+            if shutil.which("ffmpeg"):
+                self.ffmpeg_path = shutil.which("ffmpeg")
+                logger.info(f"使用系统PATH中的FFmpeg: {self.ffmpeg_path}")
+                return
+            
+            logger.warning("未找到可用的FFmpeg，某些功能可能受限")
+            
+        except Exception as e:
+            logger.error(f"初始化FFmpeg路径失败: {e}")
+    
+    def get_ffmpeg_status(self) -> Dict[str, Any]:
+        """获取FFmpeg状态信息"""
+        try:
+            status = {
+                "available": False,
+                "path": None,
+                "method": "none",
+                "version": None
+            }
+            
+            # 尝试从集成器获取状态
+            try:
+                from ..core.ffmpeg_integrator import ffmpeg_integrator
+                if ffmpeg_integrator.is_available():
+                    integrator_status = ffmpeg_integrator.get_installation_status()
+                    status.update(integrator_status)
+                    return status
+            except ImportError:
+                pass
+            
+            # 尝试从管理器获取状态
+            try:
+                from ..core.ffmpeg_manager import ffmpeg_manager
+                if ffmpeg_manager.is_available():
+                    manager_status = ffmpeg_manager.get_installation_status()
+                    status.update(manager_status)
+                    return status
+            except ImportError:
+                pass
+            
+            # 基本状态
+            status["available"] = bool(self.ffmpeg_path)
+            status["path"] = self.ffmpeg_path
+            
+            return status
+            
+        except Exception as e:
+            logger.error(f"获取FFmpeg状态失败: {e}")
+            return {"available": False, "path": None, "method": "error", "version": None}
+    
+    def force_reinstall_ffmpeg(self) -> bool:
+        """强制重新安装FFmpeg"""
+        try:
+            # 尝试使用集成器重新安装
+            try:
+                from ..core.ffmpeg_integrator import ffmpeg_integrator
+                if ffmpeg_integrator.force_reinstall():
+                    # 重新初始化FFmpeg路径
+                    self._init_ffmpeg_path()
+                    logger.info("FFmpeg重新安装成功")
+                    return True
+            except ImportError:
+                pass
+            
+            # 尝试使用管理器重新安装
+            try:
+                from ..core.ffmpeg_manager import ffmpeg_manager
+                if ffmpeg_manager.force_reinstall():
+                    # 重新初始化FFmpeg路径
+                    self._init_ffmpeg_path()
+                    logger.info("FFmpeg重新安装成功")
+                    return True
+            except ImportError:
+                pass
+            
+            logger.warning("无法重新安装FFmpeg")
+            return False
+            
+        except Exception as e:
+            logger.error(f"强制重新安装FFmpeg失败: {e}")
+            return False
 
 
 

@@ -10,7 +10,7 @@ Yeguo-Downloader - 视频下载器应用程序
 版本号: 1.0.3
 """
 
-__version__ = "1.0.2"
+__version__ = "1.5.0"
 __author__ = "mrchzh"
 __email__ = "gmrchzh@gmail.com"
 

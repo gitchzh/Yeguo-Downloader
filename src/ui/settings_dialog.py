@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
     QLabel, QLineEdit, QPushButton, QSpinBox, QCheckBox,
     QComboBox, QGroupBox, QFormLayout, QFileDialog, QMessageBox,
-    QSlider, QTextEdit, QDialogButtonBox
+    QDialogButtonBox, QScrollArea, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QSettings
 from PyQt5.QtGui import QFont
@@ -31,8 +31,7 @@ class SettingsDialog(QDialog):
         self.settings = QSettings("MyCompany", "VideoDownloader")
         self.init_ui()
         self.load_settings()
-        # 自动检测FFmpeg状态
-        self.detect_ffmpeg()
+        # 初始化完成
         
     def center_on_parent(self) -> None:
         """将对话框居中显示在父窗口上"""
@@ -46,59 +45,66 @@ class SettingsDialog(QDialog):
     def init_ui(self) -> None:
         """初始化用户界面"""
         self.setWindowTitle("设置")
-        self.setFixedSize(600, 500)
+        self.setFixedSize(650, 550)  # 固定尺寸，紧凑布局，去掉下半部分空白
         self.setModal(True)
         
         # 设置窗口居中显示
         self.center_on_parent()
         
-        # 应用Visual Studio浅色主题样式表
+        # 应用与主界面一致的Cursor风格浅色主题样式表
         self.setStyleSheet("""
+            /* 全局字体设置 - 统一微软雅黑 */
+            * {
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-size: 13px;
+                font-weight: 400;
+            }
+            
             QDialog {
-                background-color: #f6f6f6;
+                background-color: #ffffff;
                 color: #1e1e1e;
-                font-family: "Segoe UI", "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
                 font-size: 13px;
             }
             
             QTabWidget::pane {
-                border: 1px solid #e1e1e1;
-                background-color: #f6f6f6;
-                border-radius: 3px;
+                border: 1px solid #e9ecef;
+                background-color: #ffffff;
+                border-radius: 8px;
             }
             
             QTabBar::tab {
-                background-color: #f3f3f3;
+                background-color: #f8f9fa;
                 color: #1e1e1e;
                 padding: 8px 16px;
                 margin-right: 2px;
-                border: 1px solid #e1e1e1;
+                border: 1px solid #e9ecef;
                 border-bottom: none;
-                border-top-left-radius: 3px;
-                border-top-right-radius: 3px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
                 font-weight: 400;
             }
             
             QTabBar::tab:selected {
-                background-color: #f6f6f6;
-                color: #0078d4;
-                border-bottom: 2px solid #0078d4;
+                background-color: #ffffff;
+                color: #007bff;
+                border-bottom: 2px solid #007bff;
             }
             
             QTabBar::tab:hover {
-                background-color: #e1e1e1;
+                background-color: #e9ecef;
             }
             
             QGroupBox {
-                font-family: "Segoe UI", "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
                 font-size: 13px;
                 font-weight: 400;
                 color: #1e1e1e;
-                border: 1px solid #e1e1e1;
-                border-radius: 3px;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
                 margin-top: 12px;
                 padding-top: 12px;
-                background-color: #f3f3f3;
+                background-color: #f8f9fa;
             }
             
             QGroupBox::title {
@@ -108,150 +114,103 @@ class SettingsDialog(QDialog):
                 color: #1e1e1e;
             }
             
+            /* 按钮样式 - 统一风格 */
             QPushButton {
-                background-color: #0078d4;
-                color: #ffffff;
-                border: 1px solid #0078d4;
+                background-color: #fdfdfd;
+                color: #000000;
+                border: 1px solid #d5d5d5;
                 border-radius: 3px;
-                padding: 6px 10px;
-                font-family: "Segoe UI", "Microsoft YaHei", "微软雅黑", sans-serif;
+                padding: 4px 8px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
                 font-size: 13px;
-                min-height: 28px;
-                min-width: 80px;
-            }
-            
-            QPushButton:hover {
-                background-color: #106ebe;
-                border: 1px solid #106ebe;
-            }
-            
-            QPushButton:pressed {
-                background-color: #005a9e;
-                border: 1px solid #005a9e;
-            }
-            
-            QPushButton:disabled {
-                background-color: #f3f3f3;
-                color: #a0a0a0;
-                border: 1px solid #e1e1e1;
-            }
-            
-            QLineEdit, QTextEdit {
-                background-color: #ffffff;
-                border: 1px solid #e1e1e1;
-                padding: 6px 0px 6px 8px;
-                color: #1e1e1e;
-                font-family: "Segoe UI", "Microsoft YaHei", "微软雅黑", sans-serif;
-                font-size: 13px;
-                border-radius: 3px;
-                selection-background-color: #0078d4;
-            }
-            
-            /* 滚动条样式 - 完全贴右边，无右侧空间 */
-            QScrollBar:vertical {
-                background-color: transparent;
-                width: 12px;
-                border-radius: 0px;
-                margin: 0px;
-                position: absolute;
-                right: 0px;
-                top: 0px;
-                bottom: 0px;
-                border: none;
-            }
-
-            QScrollBar::handle:vertical {
-                background-color: #c1c1c1;
                 min-height: 20px;
-                border-radius: 0px;
-                border: none;
+                min-width: 50px;
                 margin: 0px;
-                width: 12px;
+                font-weight: normal;
             }
 
-            QScrollBar::handle:vertical:hover {
-                background-color: #a8a8a8;
-            }
-
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-                background-color: transparent;
-                border: none;
-            }
-
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background-color: transparent;
-                border: none;
+            QPushButton:hover {
+                background-color: #cce4f7;
+                border: 1px solid #2670ad;
             }
             
-            /* 确保滚动条完全贴右边 */
-            QScrollBar::right-arrow:vertical, QScrollBar::left-arrow:vertical {
-                width: 0px;
-                height: 0px;
-                background-color: transparent;
-                border: none;
-            }
-            
-            QLineEdit:focus, QTextEdit:focus {
-                border: 1px solid #0078d4;
-                outline: none;
-                border-radius: 3px;
-            }
-            
-            QLineEdit:hover, QTextEdit:hover {
-                border: 1px solid #0078d4;
-                border-radius: 3px;
-            }
-            
-            QLabel {
-                color: #1e1e1e;
-                font-family: "Segoe UI", "Microsoft YaHei", "微软雅黑", sans-serif;
+            /* 输入框样式 - Cursor风格浅色主题 */
+            QTextEdit, QLineEdit {
                 font-size: 13px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                padding: 6px 12px;
+                border: 1px solid #e9ecef;
+                background-color: #ffffff;
+                border-radius: 8px;
+                color: #1e1e1e;
+                selection-background-color: #007bff;
+                margin: 0px;
+            }
+
+            QTextEdit:focus, QLineEdit:focus {
+                border: 1px solid #007bff;
+                outline: none;
+                border-radius: 8px;
+            }
+
+            QTextEdit:hover, QLineEdit:hover {
+                border: 1px solid #007bff;
+                border-radius: 8px;
             }
             
+            /* 标签样式 - Cursor风格浅色主题 */
+            QLabel {
+                font-size: 13px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                color: #1e1e1e;
+                font-weight: 400;
+            }
+            
+            /* 数字输入框和下拉框样式 - Cursor风格浅色主题 */
             QSpinBox, QComboBox {
                 background-color: #ffffff;
-                border: 1px solid #e1e1e1;
-                padding: 4px 6px;
+                border: 1px solid #e9ecef;
+                padding: 8px 12px;
                 color: #1e1e1e;
-                font-family: "Segoe UI", "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
                 font-size: 13px;
-                border-radius: 3px;
+                border-radius: 8px;
             }
             
             QSpinBox:focus, QComboBox:focus {
-                border: 1px solid #0078d4;
-                border-radius: 3px;
+                border: 1px solid #007bff;
+                border-radius: 8px;
             }
             
             QSpinBox:hover, QComboBox:hover {
-                border: 1px solid #0078d4;
-                border-radius: 3px;
+                border: 1px solid #007bff;
+                border-radius: 8px;
             }
             
+            /* 复选框样式 - Cursor风格浅色主题 */
             QCheckBox {
                 color: #1e1e1e;
                 font-size: 13px;
                 spacing: 6px;
-                font-family: "Segoe UI", "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
             }
             
             QCheckBox::indicator {
                 width: 16px;
                 height: 16px;
-                border: 1px solid #e1e1e1;
-                border-radius: 2px;
+                border: 1px solid #e9ecef;
+                border-radius: 4px;
                 background-color: #ffffff;
             }
             
             QCheckBox::indicator:checked {
-                background-color: #0078d4;
-                border: 1px solid #0078d4;
-                image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOSIgdmlld0JveD0iMCAwIDEyIDkiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDQuNUw0LjUgOEwxMSAxIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K);
+                background-color: #007bff;
+                border: 1px solid #007bff;
+                image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOSIgdmlld0JveD0iMCAwIDEyIDkiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDQuNUw0LjUgOEwxMSAxIiBzdHJva2U9IndoaXRlIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+Cg==);
             }
             
             QCheckBox::indicator:hover {
-                border: 1px solid #0078d4;
+                border: 1px solid #007bff;
             }
             
             QDialogButtonBox QPushButton {
@@ -277,77 +236,76 @@ class SettingsDialog(QDialog):
                 border: 1px solid #2670ad;
             }
             
-            QDialogButtonBox QPushButton[text="确定"] {
-                background-color: #fdfdfd;
-                border: 1px solid #d5d5d5;
+            QSpinBox, QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #e1e1e1;
+                padding: 4px 6px;
+                color: #1e1e1e;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-size: 13px;
+                border-radius: 3px;
+                min-height: 20px;
             }
             
-            QDialogButtonBox QPushButton[text="确定"]:hover {
-                background-color: #cce4f7;
-                border: 1px solid #2670ad;
+            QCheckBox {
+                color: #1e1e1e;
+                font-size: 13px;
+                spacing: 6px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                min-height: 20px;
             }
             
-            QDialogButtonBox QPushButton[text="取消"] {
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+                border: 1px solid #e1e1e1;
+                border-radius: 2px;
+                background-color: #ffffff;
+            }
+            
+            QCheckBox::indicator:checked {
+                background-color: #0078d4;
+                border: 1px solid #0078d4;
+            }
+            
+            QDialogButtonBox QPushButton {
                 background-color: #fdfdfd;
-                border: 1px solid #d5d5d5;
                 color: #000000;
-            }
-            
-            QDialogButtonBox QPushButton[text="取消"]:hover {
-                background-color: #cce4f7;
-                border: 1px solid #2670ad;
-            }
-            
-            QDialogButtonBox QPushButton[text="应用"] {
-                background-color: #fdfdfd;
                 border: 1px solid #d5d5d5;
+                border-radius: 3px;
+                padding: 4px 8px;
+                font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+                font-size: 13px;
+                min-height: 20px;
+                min-width: 50px;
             }
             
-            QDialogButtonBox QPushButton[text="应用"]:hover {
+            QDialogButtonBox QPushButton:hover {
                 background-color: #cce4f7;
                 border: 1px solid #2670ad;
             }
-
-                         /* 紧凑型图标设置 - 与反馈页面保持一致 */
-                         QPushButton {
-                             background-color: #fdfdfd;
-                             color: #000000;
-                             border: 1px solid #d5d5d5;
-                             border-radius: 3px;
-                             padding: 4px 8px;
-                             font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
-                             font-size: 13px;
-                             min-height: 20px;
-                             min-width: 50px;
-                             font-weight: normal;
-                             icon-size: 16px 16px;
-                         }
-                         
-                         QPushButton:hover {
-                             background-color: #cce4f7;
-                             border: 1px solid #2670ad;
-                         }
-                         
-                         QPushButton:pressed {
-                             background-color: #cce4f7;
-                             border: 1px solid #2670ad;
-                         }
-                         
-                         QPushButton:disabled {
-                             background-color: #f5f5f5;
-                             border: 1px solid #d0d0d0;
-                             color: #999999;
-                         }
-
-                         QTabBar::tab {
-                             icon-size: 14px 14px;
-                             padding: 6px 12px;
-                         }
-
-                         QCheckBox::indicator {
-                             width: 14px;
-                             height: 14px;
-                         }
+            
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            
+            QScrollBar:vertical {
+                background-color: #f0f0f0;
+                width: 12px;
+                border-radius: 6px;
+            }
+            
+            QScrollBar::handle:vertical {
+                background-color: #c1c1c1;
+                min-height: 20px;
+                border-radius: 6px;
+                border: none;
+            }
+            
+            QScrollBar::handle:vertical:hover {
+                background-color: #a8a8a8;
+            }
         """)
         
         # 创建主布局
@@ -369,8 +327,8 @@ class SettingsDialog(QDialog):
         
         # 重置按钮
         reset_button = QPushButton("重置默认")
-        reset_button.setFont(QFont("Microsoft YaHei", 11))  # 统一使用微软雅黑字体
-        reset_button.setFixedSize(80, 24)  # 与反馈页面按钮保持一致
+        reset_button.setFont(QFont("Microsoft YaHei", 11))
+        reset_button.setFixedSize(80, 24)
         reset_button.clicked.connect(self.reset_to_defaults)
         button_layout.addWidget(reset_button)
         
@@ -393,6 +351,93 @@ class SettingsDialog(QDialog):
         
         layout.addLayout(button_layout)
         self.setLayout(layout)
+    
+    def create_scrollable_tab(self, content_widget: QWidget) -> QWidget:
+        """创建可滚动的标签页"""
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidget(content_widget)
+        scroll_area.setWidgetResizable(True)
+        
+        # 设置滚动条策略：水平滚动条根据需要显示，垂直滚动条始终显示
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        
+        # 设置滚动区域的最小大小，确保有足够空间显示内容
+        scroll_area.setMinimumSize(650, 600)  # 增加高度以容纳更多内容
+        
+        # 设置内容控件的最小大小策略，确保内容能够完整显示
+        content_widget.setMinimumSize(600, 550)  # 增加高度以容纳更多内容
+        
+        # 应用滚动条样式，与界面设置保持一致
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            
+            QScrollBar:vertical {
+                background-color: #f0f0f0;
+                width: 12px;
+                border-radius: 6px;
+                margin: 0px;
+            }
+            
+            QScrollBar::handle:vertical {
+                background-color: #c1c1c1;
+                min-height: 20px;
+                border-radius: 6px;
+                border: none;
+                margin: 0px;
+            }
+            
+            QScrollBar::handle:vertical:hover {
+                background-color: #a8a8a8;
+            }
+            
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+                background-color: transparent;
+                border: none;
+            }
+            
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background-color: transparent;
+                border: none;
+            }
+            
+            QScrollBar:horizontal {
+                background-color: #f0f0f0;
+                height: 12px;
+                border-radius: 6px;
+                margin: 0px;
+            }
+            
+            QScrollBar::handle:horizontal {
+                background-color: #c1c1c1;
+                min-width: 20px;
+                border-radius: 6px;
+                border: none;
+                margin: 0px;
+            }
+            
+            QScrollBar::handle:horizontal:hover {
+                background-color: #a8a8a8;
+            }
+            
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                width: 0px;
+                background-color: transparent;
+                border: none;
+            }
+            
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        
+        return scroll_area
         
     def create_basic_tab(self) -> QWidget:
         """创建基本设置页面"""
@@ -405,6 +450,7 @@ class SettingsDialog(QDialog):
         
         self.save_path_edit = QLineEdit()
         self.save_path_edit.setPlaceholderText("选择默认下载路径")
+        
         self.browse_path_button = QPushButton("浏览...")
         self.browse_path_button.setFont(QFont("Microsoft YaHei", 11))  # 统一使用微软雅黑字体
         self.browse_path_button.setFixedSize(60, 24)  # 与反馈页面按钮保持一致
@@ -436,18 +482,35 @@ class SettingsDialog(QDialog):
         background_group = QGroupBox("后台运行")
         background_layout = QFormLayout()
         
-        self.minimize_to_tray = QCheckBox("关闭时最小化到系统托盘")
-        self.minimize_to_tray.setToolTip("启用后，关闭程序时会最小化到系统托盘而不是完全退出")
-        background_layout.addRow("", self.minimize_to_tray)
-        
-        self.start_minimized = QCheckBox("启动时最小化到系统托盘")
-        self.start_minimized.setToolTip("启用后，程序启动时会直接最小化到系统托盘")
-        background_layout.addRow("", self.start_minimized)
+        # 后台运行设置已迁移到高级设置页面的高级选项组
         
         background_group.setLayout(background_layout)
         layout.addWidget(background_group)
         
-        layout.addStretch()
+        # 日志设置
+        log_group = QGroupBox("日志设置")
+        log_layout = QFormLayout()
+        
+        self.log_level = QComboBox()
+        self.log_level.addItems(["DEBUG", "INFO", "WARNING", "ERROR"])
+        self.log_level.setCurrentText("INFO")
+        self.log_level.setFixedHeight(30)  # 固定高度为30px
+        log_layout.addRow("日志级别:", self.log_level)
+        
+        self.auto_clear_log = QCheckBox("自动清理旧日志")
+        self.auto_clear_log.setFixedHeight(30)  # 固定高度为30px
+        log_layout.addRow("", self.auto_clear_log)
+        
+        self.log_retention_days = QSpinBox()
+        self.log_retention_days.setRange(1, 365)
+        self.log_retention_days.setValue(30)
+        self.log_retention_days.setSuffix(" 天")
+        self.log_retention_days.setFixedHeight(30)  # 固定高度为30px
+        log_layout.addRow("日志保留天数:", self.log_retention_days)
+        
+        log_group.setLayout(log_layout)
+        layout.addWidget(log_group)
+        
         widget.setLayout(layout)
         return widget
         
@@ -494,7 +557,6 @@ class SettingsDialog(QDialog):
         format_group.setLayout(format_layout)
         layout.addWidget(format_group)
         
-        layout.addStretch()
         widget.setLayout(layout)
         return widget
         
@@ -537,7 +599,6 @@ class SettingsDialog(QDialog):
         notification_group.setLayout(notification_layout)
         layout.addWidget(notification_group)
         
-        layout.addStretch()
         widget.setLayout(layout)
         return widget
         
@@ -548,21 +609,16 @@ class SettingsDialog(QDialog):
         
         # FFmpeg设置
         ffmpeg_group = QGroupBox("FFmpeg设置")
+        ffmpeg_group.setMinimumHeight(80)  # 减少最小高度，减少空白空间
         ffmpeg_layout = QFormLayout()
+        ffmpeg_layout.setSpacing(8)  # 减少表单项间距，紧凑布局
         
-        # FFmpeg使用方法选择
-        self.ffmpeg_method_combo = QComboBox()
-        self.ffmpeg_method_combo.addItems(["自动检测", "系统FFmpeg", "Python库", "MoviePy"])
-        self.ffmpeg_method_combo.setCurrentText("自动检测")
-        self.ffmpeg_method_combo.currentTextChanged.connect(self.on_ffmpeg_method_changed)
-        ffmpeg_layout.addRow("FFmpeg使用方法:", self.ffmpeg_method_combo)
-        
-        # FFmpeg路径设置（仅在使用系统FFmpeg时显示）
         self.ffmpeg_path_edit = QLineEdit()
         self.ffmpeg_path_edit.setPlaceholderText("FFmpeg可执行文件路径")
+        self.ffmpeg_path_edit.setFixedHeight(36)  # 增加高度到36px，确保提示文字完全显示
         self.browse_ffmpeg_button = QPushButton("浏览...")
-        self.browse_ffmpeg_button.setFont(QFont("Microsoft YaHei", 11))
-        self.browse_ffmpeg_button.setFixedSize(60, 24)
+        self.browse_ffmpeg_button.setFont(QFont("Microsoft YaHei", 11))  # 统一使用微软雅黑字体
+        self.browse_ffmpeg_button.setFixedSize(60, 24)  # 与反馈页面按钮保持一致
         self.browse_ffmpeg_button.clicked.connect(self.browse_ffmpeg_path)
         
         ffmpeg_button_layout = QHBoxLayout()
@@ -571,60 +627,82 @@ class SettingsDialog(QDialog):
         
         ffmpeg_layout.addRow("FFmpeg路径:", ffmpeg_button_layout)
         
-        # FFmpeg状态显示
-        self.ffmpeg_status_label = QLabel("状态: 未检测")
-        self.ffmpeg_status_label.setStyleSheet("color: #666; font-size: 11px;")
-        ffmpeg_layout.addRow("", self.ffmpeg_status_label)
-        
-        # 检测FFmpeg按钮
-        self.detect_ffmpeg_button = QPushButton("检测FFmpeg")
-        self.detect_ffmpeg_button.setFont(QFont("Microsoft YaHei", 10))
-        self.detect_ffmpeg_button.clicked.connect(self.detect_ffmpeg)
-        ffmpeg_layout.addRow("", self.detect_ffmpeg_button)
-        
         ffmpeg_group.setLayout(ffmpeg_layout)
         layout.addWidget(ffmpeg_group)
         
         # 网络设置
         network_group = QGroupBox("网络设置")
+        network_group.setMinimumHeight(120)  # 减少最小高度，紧凑布局
         network_layout = QFormLayout()
+        network_layout.setSpacing(10)  # 减少表单项间距，紧凑布局
         
         self.proxy_enabled = QCheckBox("启用代理")
+        self.proxy_enabled.setFixedHeight(30)  # 固定高度为30px
         network_layout.addRow("", self.proxy_enabled)
         
         self.proxy_url = QLineEdit()
         self.proxy_url.setPlaceholderText("http://proxy:port")
+        self.proxy_url.setFixedHeight(36)  # 增加高度到36px，确保提示文字完全显示
         network_layout.addRow("代理地址:", self.proxy_url)
         
         self.user_agent = QLineEdit()
         self.user_agent.setPlaceholderText("自定义User-Agent")
+        self.user_agent.setFixedHeight(36)  # 增加高度到36px，确保提示文字完全显示
         network_layout.addRow("User-Agent:", self.user_agent)
         
         network_group.setLayout(network_layout)
         layout.addWidget(network_group)
         
-        # 日志设置
-        log_group = QGroupBox("日志设置")
-        log_layout = QFormLayout()
+        # 高级选项设置
+        advanced_options_group = QGroupBox("高级选项")
+        advanced_options_group.setMinimumHeight(120)  # 两列布局更紧凑，减少高度
+        advanced_options_layout = QVBoxLayout()
+        advanced_options_layout.setSpacing(10)  # 减少表单项间距，紧凑布局
         
-        self.log_level = QComboBox()
-        self.log_level.addItems(["DEBUG", "INFO", "WARNING", "ERROR"])
-        self.log_level.setCurrentText("INFO")
-        log_layout.addRow("日志级别:", self.log_level)
+        # 创建两列布局
+        columns_layout = QHBoxLayout()
+        columns_layout.setSpacing(20)  # 两列之间的间距
         
-        self.auto_clear_log = QCheckBox("自动清理旧日志")
-        log_layout.addRow("", self.auto_clear_log)
+        # 左列：2个设置项
+        left_column = QVBoxLayout()
+        left_column.setSpacing(10)
         
-        self.log_retention_days = QSpinBox()
-        self.log_retention_days.setRange(1, 365)
-        self.log_retention_days.setValue(30)
-        self.log_retention_days.setSuffix(" 天")
-        log_layout.addRow("日志保留天数:", self.log_retention_days)
+        self.enable_debug_mode = QCheckBox("启用调试模式")
+        self.enable_debug_mode.setToolTip("启用后将显示详细的调试信息")
+        self.enable_debug_mode.setFixedHeight(30)  # 固定高度为30px
+        left_column.addWidget(self.enable_debug_mode)
         
-        log_group.setLayout(log_layout)
-        layout.addWidget(log_group)
+        self.remember_window_position = QCheckBox("记住窗口位置")
+        self.remember_window_position.setChecked(True)
+        self.remember_window_position.setToolTip("下次启动时恢复上次的窗口位置和大小")
+        self.remember_window_position.setFixedHeight(30)  # 固定高度为30px
+        left_column.addWidget(self.remember_window_position)
         
-        layout.addStretch()
+        # 右列：2个设置项，与左列完全对齐
+        right_column = QVBoxLayout()
+        right_column.setSpacing(10)
+        
+        # 后台运行设置
+        self.minimize_to_tray = QCheckBox("关闭时最小化到系统托盘")
+        self.minimize_to_tray.setToolTip("启用后，关闭程序时会最小化到系统托盘而不是完全退出")
+        self.minimize_to_tray.setFixedHeight(30)  # 固定高度为30px
+        right_column.addWidget(self.minimize_to_tray)
+        
+        self.start_minimized = QCheckBox("启动时最小化到系统托盘")
+        self.start_minimized.setToolTip("启用后，程序启动时会直接最小化到系统托盘")
+        self.start_minimized.setFixedHeight(30)  # 固定高度为30px
+        right_column.addWidget(self.start_minimized)
+        
+        # 将两列添加到水平布局中，确保对齐
+        columns_layout.addLayout(left_column)
+        columns_layout.addLayout(right_column)
+        
+        # 将两列布局添加到主布局中
+        advanced_options_layout.addLayout(columns_layout)
+        
+        advanced_options_group.setLayout(advanced_options_layout)
+        layout.addWidget(advanced_options_group)
+        
         widget.setLayout(layout)
         return widget
         
@@ -644,58 +722,23 @@ class SettingsDialog(QDialog):
         if file_path:
             self.ffmpeg_path_edit.setText(file_path)
             
-    def on_ffmpeg_method_changed(self, method: str) -> None:
-        """FFmpeg使用方法改变时的处理"""
-        # 根据选择的方法显示/隐藏相关控件
-        if method == "系统FFmpeg":
-            self.ffmpeg_path_edit.setEnabled(True)
-            self.browse_ffmpeg_button.setEnabled(True)
-        else:
-            self.ffmpeg_path_edit.setEnabled(False)
-            self.browse_ffmpeg_button.setEnabled(False)
+
             
     def detect_ffmpeg(self) -> None:
-        """检测FFmpeg状态"""
+        """检测FFmpeg状态（简化版本）"""
         try:
-            from ..core.ffmpeg_manager import ffmpeg_manager
+            from ..core.ffmpeg_manager import FFmpegManager
+            ffmpeg_manager = FFmpegManager()
             
-            if ffmpeg_manager.is_available():
-                method = ffmpeg_manager.get_method()
-                path = ffmpeg_manager.get_ffmpeg_path()
-                version = ffmpeg_manager.get_version()
-                
-                if method == "system":
-                    status_text = f"状态: 系统FFmpeg可用 ({version})"
-                    self.ffmpeg_status_label.setStyleSheet("color: #28a745; font-size: 11px;")
-                elif method == "python":
-                    status_text = f"状态: ffmpeg-python库可用"
-                    self.ffmpeg_status_label.setStyleSheet("color: #28a745; font-size: 11px;")
-                elif method == "moviepy":
-                    status_text = f"状态: MoviePy库可用"
-                    self.ffmpeg_status_label.setStyleSheet("color: #28a745; font-size: 11px;")
-                else:
-                    status_text = f"状态: 未知方法"
-                    self.ffmpeg_status_label.setStyleSheet("color: #dc3545; font-size: 11px;")
+            # 检测FFmpeg状态
+            method, path, version = ffmpeg_manager.get_ffmpeg_status()
+            
+            if method and path:
+                # 如果检测到FFmpeg，自动设置路径
+                if method == "system" and path:
+                    self.ffmpeg_path_edit.setText(path)
                     
-                self.ffmpeg_status_label.setText(status_text)
-                
-                # 更新使用方法选择
-                if method == "system":
-                    self.ffmpeg_method_combo.setCurrentText("系统FFmpeg")
-                    if path:
-                        self.ffmpeg_path_edit.setText(path)
-                elif method == "python":
-                    self.ffmpeg_method_combo.setCurrentText("Python库")
-                elif method == "moviepy":
-                    self.ffmpeg_method_combo.setCurrentText("MoviePy")
-                    
-            else:
-                self.ffmpeg_status_label.setText("状态: FFmpeg不可用")
-                self.ffmpeg_status_label.setStyleSheet("color: #dc3545; font-size: 11px;")
-                
         except Exception as e:
-            self.ffmpeg_status_label.setText(f"状态: 检测失败 - {str(e)}")
-            self.ffmpeg_status_label.setStyleSheet("color: #dc3545; font-size: 11px;")
             logger.error(f"FFmpeg检测失败: {e}")
             
     def load_settings(self) -> None:
@@ -726,17 +769,17 @@ class SettingsDialog(QDialog):
             self.play_sound.setChecked(self.settings.value("play_sound", False, type=bool))
             
             # 高级设置
-            ffmpeg_method = self.settings.value("ffmpeg_method", "自动检测")
-            self.ffmpeg_method_combo.setCurrentText(ffmpeg_method)
             self.ffmpeg_path_edit.setText(self.settings.value("ffmpeg_path", ""))
-            # 根据方法设置控件状态
-            self.on_ffmpeg_method_changed(ffmpeg_method)
             self.proxy_enabled.setChecked(self.settings.value("proxy_enabled", False, type=bool))
             self.proxy_url.setText(self.settings.value("proxy_url", ""))
             self.user_agent.setText(self.settings.value("user_agent", ""))
             self.log_level.setCurrentText(self.settings.value("log_level", "INFO"))
             self.auto_clear_log.setChecked(self.settings.value("auto_clear_log", False, type=bool))
             self.log_retention_days.setValue(self.settings.value("log_retention_days", 30, type=int))
+            
+            # 高级选项设置
+            self.enable_debug_mode.setChecked(self.settings.value("enable_debug_mode", False, type=bool))
+            self.remember_window_position.setChecked(self.settings.value("remember_window_position", True, type=bool))
             
         except Exception as e:
             logger.error(f"加载设置失败: {str(e)}")
@@ -768,7 +811,6 @@ class SettingsDialog(QDialog):
             self.settings.setValue("play_sound", self.play_sound.isChecked())
             
             # 高级设置
-            self.settings.setValue("ffmpeg_method", self.ffmpeg_method_combo.currentText())
             self.settings.setValue("ffmpeg_path", self.ffmpeg_path_edit.text())
             self.settings.setValue("proxy_enabled", self.proxy_enabled.isChecked())
             self.settings.setValue("proxy_url", self.proxy_url.text())
@@ -776,6 +818,10 @@ class SettingsDialog(QDialog):
             self.settings.setValue("log_level", self.log_level.currentText())
             self.settings.setValue("auto_clear_log", self.auto_clear_log.isChecked())
             self.settings.setValue("log_retention_days", self.log_retention_days.value())
+            
+            # 高级选项设置
+            self.settings.setValue("enable_debug_mode", self.enable_debug_mode.isChecked())
+            self.settings.setValue("remember_window_position", self.remember_window_position.isChecked())
             
             self.settings.sync()
             logger.info("设置已保存")
@@ -827,7 +873,6 @@ class SettingsDialog(QDialog):
             "auto_hide_progress": self.auto_hide_progress.isChecked(),
             "show_completion_dialog": self.show_completion_dialog.isChecked(),
             "play_sound": self.play_sound.isChecked(),
-            "ffmpeg_method": self.ffmpeg_method_combo.currentText(),
             "ffmpeg_path": self.ffmpeg_path_edit.text(),
             "proxy_enabled": self.proxy_enabled.isChecked(),
             "proxy_url": self.proxy_url.text(),
@@ -835,4 +880,7 @@ class SettingsDialog(QDialog):
             "log_level": self.log_level.currentText(),
             "auto_clear_log": self.auto_clear_log.isChecked(),
             "log_retention_days": self.log_retention_days.value(),
+            "enable_debug_mode": self.enable_debug_mode.isChecked(),
+
+            "remember_window_position": self.remember_window_position.isChecked(),
         }

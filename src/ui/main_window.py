@@ -103,10 +103,10 @@ class VideoDownloader(QMainWindow, VideoDownloaderMethods):
         """获取图标文件路径"""
         if getattr(sys, "frozen", False):
             # 打包后的程序
-            return os.path.join(sys._MEIPASS, "resources", "LOGO.png")
+            return os.path.join(sys._MEIPASS, "resources", "logo.ico")
         else:
             # 开发环境
-            return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "resources", "LOGO.png")
+            return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "resources", "logo.ico")
 
     def init_ui(self) -> None:
         """
@@ -1222,3 +1222,70 @@ class VideoDownloader(QMainWindow, VideoDownloaderMethods):
             # 正常关闭
             self.quit_application()
             event.accept()
+    
+    def cleanup_workers(self) -> None:
+        """清理所有工作线程，防止内存泄漏"""
+        try:
+            # 清理解析工作线程
+            for worker in self.parse_workers[:]:  # 使用切片创建副本避免修改迭代中的列表
+                if worker and worker.isRunning():
+                    worker.cancel()
+                    worker.wait(3000)  # 等待最多3秒
+                    if worker.isRunning():
+                        worker.terminate()  # 强制终止
+                        worker.wait(1000)
+                self.parse_workers.remove(worker)
+            
+            # 清理下载工作线程
+            for worker in self.download_workers[:]:
+                if worker and worker.isRunning():
+                    worker.cancel()
+                    worker.wait(3000)
+                    if worker.isRunning():
+                        worker.terminate()
+                        worker.wait(1000)
+                self.download_workers.remove(worker)
+            
+            # 清理网易云音乐工作线程
+            for worker in self.netease_music_workers[:]:
+                if worker and hasattr(worker, 'cancel') and callable(worker.cancel):
+                    worker.cancel()
+                    if hasattr(worker, 'wait') and callable(worker.wait):
+                        worker.wait(3000)
+                self.netease_music_workers.remove(worker)
+            
+            # 清空缓存和队列
+            self.parse_cache.clear()
+            self.formats.clear()
+            self.download_progress.clear()
+            self.download_queue.clear()
+            
+            logger.info("所有工作线程已清理完成")
+            
+        except Exception as e:
+            logger.error(f"清理工作线程时发生错误: {e}")
+    
+    def quit_application(self) -> None:
+        """退出应用程序"""
+        try:
+            # 停止所有下载
+            if self.is_downloading:
+                reply = QMessageBox.question(
+                    self, "确认退出",
+                    "当前有下载任务正在进行，是否要退出程序？",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
+                )
+                if reply == QMessageBox.No:
+                    return
+                self.cancel_downloads()
+            
+            # 清理所有工作线程
+            self.cleanup_workers()
+            
+            # 退出应用程序
+            QApplication.quit()
+            
+        except Exception as e:
+            logger.error(f"退出应用程序时发生错误: {e}")
+            QApplication.quit()

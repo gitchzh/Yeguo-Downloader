@@ -14,7 +14,7 @@
 - LogExporter: 日志导出器
 
 作者: 椰果IDM开发团队
-版本: 1.0.2
+版本: 1.5.0
 """
 
 import os
@@ -65,39 +65,91 @@ class LogManager(QObject):
         self._start_log_monitor()
     
     def _setup_logger(self) -> None:
-        """设置日志记录器"""
-        # 配置日志格式
-        formatter = logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
-        
-        # 创建文件处理器
+        """设置日志记录器 - 改进版本"""
         try:
-            file_handler = logging.FileHandler(self.log_file, encoding='utf-8')
-            file_handler.setLevel(logging.INFO)
-            file_handler.setFormatter(formatter)
-        except (OSError, IOError) as e:
-            print(f"无法创建日志文件处理器: {e}")
-            file_handler = None
-        
-        # 创建控制台处理器
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
-        console_handler.setFormatter(formatter)
-        
-        # 配置根日志记录器
-        root_logger = logging.getLogger()
-        root_logger.setLevel(logging.INFO)
-        
-        # 清除现有的处理器
-        for handler in root_logger.handlers[:]:
-            root_logger.removeHandler(handler)
-        
-        # 添加新的处理器
-        if file_handler:
-            root_logger.addHandler(file_handler)
-        root_logger.addHandler(console_handler)
+            # 配置日志格式
+            formatter = logging.Formatter(
+                "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S"
+            )
+            
+            # 创建文件处理器 - 使用RotatingFileHandler进行日志轮转
+            try:
+                from logging.handlers import RotatingFileHandler
+                file_handler = RotatingFileHandler(
+                    self.log_file, 
+                    maxBytes=self.max_file_size, 
+                    backupCount=5,  # 保留5个备份文件
+                    encoding='utf-8'
+                )
+                file_handler.setLevel(logging.INFO)
+                file_handler.setFormatter(formatter)
+                file_handler.set_name("file_handler")  # 设置处理器名称便于管理
+            except (OSError, IOError, PermissionError) as e:
+                print(f"无法创建日志文件处理器: {e}")
+                # 尝试使用备用路径
+                try:
+                    backup_log_file = os.path.join(os.path.expanduser("~"), "app_backup.log")
+                    file_handler = RotatingFileHandler(
+                        backup_log_file,
+                        maxBytes=self.max_file_size,
+                        backupCount=3,
+                        encoding='utf-8'
+                    )
+                    file_handler.setLevel(logging.INFO)
+                    file_handler.setFormatter(formatter)
+                    file_handler.set_name("backup_file_handler")
+                    print(f"使用备用日志路径: {backup_log_file}")
+                except Exception as backup_e:
+                    print(f"备用日志路径也失败: {backup_e}")
+                    file_handler = None
+            
+            # 创建控制台处理器
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.INFO)
+            console_handler.setFormatter(formatter)
+            console_handler.set_name("console_handler")
+            
+            # 配置根日志记录器
+            root_logger = logging.getLogger()
+            root_logger.setLevel(logging.INFO)
+            
+            # 清除现有的处理器（避免重复）
+            for handler in root_logger.handlers[:]:
+                try:
+                    handler.close()  # 正确关闭处理器
+                    root_logger.removeHandler(handler)
+                except Exception as e:
+                    print(f"关闭日志处理器时出错: {e}")
+            
+            # 添加新的处理器
+            if file_handler:
+                root_logger.addHandler(file_handler)
+                print(f"文件日志处理器已添加: {file_handler.name}")
+            
+            root_logger.addHandler(console_handler)
+            print("控制台日志处理器已添加")
+            
+            # 设置应用程序特定的日志记录器
+            app_logger = logging.getLogger("椰果IDM")
+            app_logger.setLevel(logging.INFO)
+            app_logger.propagate = False  # 避免重复日志
+            
+            # 为应用程序日志记录器添加处理器
+            if file_handler:
+                app_logger.addHandler(file_handler)
+            app_logger.addHandler(console_handler)
+            
+            print("日志系统初始化完成")
+            
+        except Exception as e:
+            print(f"日志系统初始化失败: {e}")
+            # 使用最基本的日志配置作为回退
+            logging.basicConfig(
+                level=logging.INFO,
+                format="%(asctime)s [%(levelname)s] %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S"
+            )
         
         # 创建应用专用日志记录器
         self.logger = logging.getLogger("VideoDownloader")

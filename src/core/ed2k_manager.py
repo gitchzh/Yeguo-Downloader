@@ -191,18 +191,74 @@ class ED2KManager:
             bool: 是否有效
         """
         try:
-            # 验证文件名
+            logger.info(f"开始验证ED2K链接信息: {ed2k_info.file_name}")
+            
+            # 1. 验证文件名
             if not ed2k_info.file_name or len(ed2k_info.file_name.strip()) == 0:
+                logger.error("文件名验证失败: 文件名为空")
                 return False
             
-            # 验证文件大小
+            # 检查文件名长度
+            if len(ed2k_info.file_name) > 255:  # 文件名最大长度限制
+                logger.error(f"文件名验证失败: 文件名过长 ({len(ed2k_info.file_name)} 字符)")
+                return False
+            
+            # 检查文件名是否包含非法字符
+            illegal_chars = ['<', '>', ':', '"', '|', '?', '*', '\\', '/']
+            if any(char in ed2k_info.file_name for char in illegal_chars):
+                logger.error(f"文件名验证失败: 包含非法字符")
+                return False
+            
+            logger.info("✅ 文件名验证通过")
+            
+            # 2. 验证文件大小
             if ed2k_info.file_size < 0:
+                logger.error(f"文件大小验证失败: 负数大小 ({ed2k_info.file_size})")
                 return False
             
-            # 验证哈希
+            # 检查文件大小的合理性
+            if ed2k_info.file_size == 0:
+                logger.warning("⚠️ 文件大小为0，可能是空文件")
+            elif ed2k_info.file_size < 1024:  # 小于1KB
+                logger.warning("⚠️ 文件大小异常小，可能不是真实文件")
+            elif ed2k_info.file_size > 1024 * 1024 * 1024 * 100:  # 大于100GB
+                logger.warning("⚠️ 文件大小异常大，可能不是真实文件")
+            
+            logger.info("✅ 文件大小验证通过")
+            
+            # 3. 验证哈希
             if not self._is_valid_ed2k_hash(ed2k_info.file_hash):
+                logger.error(f"文件哈希验证失败: 无效哈希 ({ed2k_info.file_hash})")
                 return False
             
+            logger.info("✅ 文件哈希验证通过")
+            
+            # 4. 验证文件类型一致性（如果文件名包含扩展名）
+            if '.' in ed2k_info.file_name:
+                ext = ed2k_info.file_name.split('.')[-1].lower()
+                logger.info(f"文件扩展名: {ext}")
+                
+                # 检查扩展名的合理性
+                common_exts = [
+                    # 视频格式
+                    'mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp',
+                    # 音频格式
+                    'mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a', 'opus',
+                    # 文档格式
+                    'pdf', 'doc', 'docx', 'txt', 'rtf',
+                    # 压缩格式
+                    'zip', 'rar', '7z', 'tar', 'gz',
+                    # 其他格式
+                    'iso', 'bin', 'cue', 'img'
+                ]
+                
+                if ext in common_exts:
+                    logger.info(f"✅ 文件扩展名有效: {ext}")
+                else:
+                    logger.warning(f"⚠️ 文件扩展名不常见: {ext}")
+            
+            # 5. 综合验证结果
+            logger.info("🎉 ED2K链接信息验证完全通过！")
             return True
             
         except Exception as e:

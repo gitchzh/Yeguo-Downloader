@@ -95,7 +95,9 @@ class MagnetDownloadWorker(QThread):
         except Exception as e:
             error_msg = f"磁力下载失败: {e}"
             logger.error(error_msg)
-            self.error.emit(error_msg)
+            # 只有在非暂停和非取消状态下才发送错误信号
+            if not self._is_cancelled and not self._is_paused:
+                self.error.emit(error_msg)
         finally:
             self._cleanup()
     

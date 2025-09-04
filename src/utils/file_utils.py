@@ -22,6 +22,7 @@ import re
 import sys
 import platform
 import webbrowser
+import subprocess
 from typing import Optional
 from PyQt5.QtWidgets import QMessageBox
 
@@ -31,9 +32,10 @@ from .logger import logger
 
 def sanitize_filename(filename: str, save_path: str) -> str:
     """
-    清理文件名，确保合法性
+    清理文件名，确保合法性 - 改进版本
     
     移除文件名中的非法字符，限制长度，并处理重复文件名。
+    增强路径安全性检查，防止路径遍历攻击。
     
     Args:
         filename: 原始文件名
@@ -42,61 +44,158 @@ def sanitize_filename(filename: str, save_path: str) -> str:
     Returns:
         str: 清理后的合法文件名
     """
-    # 验证保存路径的安全性
-    if not os.path.isabs(save_path):
-        save_path = os.path.abspath(save_path)
-    
-    # 检查路径遍历攻击
-    if ".." in save_path or save_path.startswith("/"):
-        logger.warning(f"检测到可疑路径: {save_path}")
-        save_path = os.getcwd()
-    
-    # 移除Windows文件系统不允许的字符
-    filename = re.sub(r'[<>:"/\\|?*]', "", filename)
-    
-    # 移除路径分隔符，防止路径遍历
-    filename = filename.replace("/", "_").replace("\\", "_")
-    
-    # 限制文件名长度
-    filename = filename[:Config.MAX_FILENAME_LENGTH]
-    
-    # 确保文件名不为空
-    if not filename.strip():
-        filename = "unnamed_file"
-    
-    # 处理重复文件名
-    base, ext = os.path.splitext(filename)
-    counter = 1
-    new_filename = filename
-    max_attempts = 100  # 限制最大尝试次数
-    
-    # 如果文件已存在，添加数字后缀
-    while os.path.exists(os.path.join(save_path, new_filename)):
-        new_filename = f"{base}_{counter}{ext}"
-        counter += 1
+    try:
+        # 验证保存路径的安全性
+        if not os.path.isabs(save_path):
+            save_path = os.path.abspath(save_path)
         
-        # 防止无限循环
-        if counter > max_attempts:
-            logger.error(f"文件名冲突过多，达到最大尝试次数 ({max_attempts}): {filename}")
-            # 使用时间戳作为后缀
-            import time
-            timestamp = int(time.time())
-            new_filename = f"{base}_{timestamp}{ext}"
-            break
+        # 检查路径遍历攻击和可疑路径
+        if not _is_safe_path(save_path):
+            logger.warning(f"检测到可疑路径: {save_path}")
+            save_path = os.getcwd()
+            logger.info(f"已重置为安全路径: {save_path}")
         
-        # 检查文件名长度是否超过限制
-        if len(new_filename) > Config.MAX_FILENAME_LENGTH:
-            # 截断基础名称
-            max_base_length = Config.MAX_FILENAME_LENGTH - len(f"_{counter}{ext}")
-            if max_base_length > 0:
-                base = base[:max_base_length]
-                new_filename = f"{base}_{counter}{ext}"
-            else:
-                # 如果仍然太长，使用时间戳
+        # 移除Windows文件系统不允许的字符
+        filename = re.sub(r'[<>:"/\\|?*]', "", filename)
+        
+        # 移除路径分隔符，防止路径遍历
+        filename = filename.replace("/", "_").replace("\\", "_")
+        
+        # 移除控制字符
+        filename = re.sub(r'[\x00-\x1f\x7f-\x9f]', "", filename)
+        
+        # 移除Unicode控制字符
+        filename = re.sub(r'[\u200b-\u200f\u2028-\u202f\u2060-\u206f]', "", filename)
+        
+        # 限制文件名长度
+        filename = filename[:Config.MAX_FILENAME_LENGTH]
+        
+        # 确保文件名不为空
+        if not filename.strip():
+            filename = "unnamed_file"
+        
+        # 处理重复文件名
+        base, ext = os.path.splitext(filename)
+        counter = 1
+        new_filename = filename
+        max_attempts = 100  # 限制最大尝试次数
+        
+        # 如果文件已存在，添加数字后缀
+        while os.path.exists(os.path.join(save_path, new_filename)):
+            new_filename = f"{base}_{counter}{ext}"
+            counter += 1
+            
+            # 防止无限循环
+            if counter > max_attempts:
+                logger.error(f"文件名冲突过多，达到最大尝试次数 ({max_attempts}): {filename}")
+                # 使用时间戳作为后缀
                 import time
                 timestamp = int(time.time())
-                new_filename = f"file_{timestamp}{ext}"
+                new_filename = f"{base}_{timestamp}{ext}"
                 break
+            
+            # 检查文件名长度是否超过限制
+            if len(new_filename) > Config.MAX_FILENAME_LENGTH:
+                # 截断基础名称
+                max_base_length = Config.MAX_FILENAME_LENGTH - len(f"_{counter}{ext}")
+                if max_base_length > 0:
+                    base = base[:max_base_length]
+                    new_filename = f"{base}_{counter}{ext}"
+                else:
+                    # 如果仍然太长，使用时间戳
+                    import time
+                    timestamp = int(time.time())
+                    new_filename = f"file_{timestamp}{ext}"
+                    break
+        
+        # 最终验证文件名安全性
+        if not _is_safe_filename(new_filename):
+            logger.warning(f"文件名仍然包含可疑字符: {new_filename}")
+            # 使用安全的默认文件名
+            import time
+            timestamp = int(time.time())
+            new_filename = f"safe_file_{timestamp}{ext}"
+        
+        return new_filename
+        
+    except Exception as e:
+        logger.error(f"文件名清理失败: {e}")
+        # 返回安全的默认文件名
+        import time
+        timestamp = int(time.time())
+        return f"safe_file_{timestamp}.mp4"
+
+
+def _is_safe_path(path: str) -> bool:
+    """
+    检查路径是否安全
+    
+    Args:
+        path: 要检查的路径
+        
+    Returns:
+        bool: 是否安全
+    """
+    try:
+        # 检查路径遍历攻击
+        if ".." in path or path.startswith("/"):
+            return False
+        
+        # 检查是否包含可疑的路径分隔符
+        if "\\" in path and platform.system().lower() != "windows":
+            return False
+        
+        # 检查路径长度
+        if len(path) > 260:  # Windows路径长度限制
+            return False
+        
+        # 检查是否包含控制字符
+        if re.search(r'[\x00-\x1f\x7f-\x9f]', path):
+            return False
+        
+        # 检查是否包含Unicode控制字符
+        if re.search(r'[\u200b-\u200f\u2028-\u202f\u2060-\u206f]', path):
+            return False
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"路径安全检查失败: {e}")
+        return False
+
+
+def _is_safe_filename(filename: str) -> bool:
+    """
+    检查文件名是否安全
+    
+    Args:
+        filename: 要检查的文件名
+        
+    Returns:
+        bool: 是否安全
+    """
+    try:
+        # 检查是否包含路径分隔符
+        if "/" in filename or "\\" in filename:
+            return False
+        
+        # 检查是否包含控制字符
+        if re.search(r'[\x00-\x1f\x7f-\x9f]', filename):
+            return False
+        
+        # 检查是否包含Unicode控制字符
+        if re.search(r'[\u200b-\u200f\u2028-\u202f\u2060-\u206f]', filename):
+            return False
+        
+        # 检查是否为空
+        if not filename.strip():
+            return False
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"文件名安全检查失败: {e}")
+        return False
         
     return new_filename
 
@@ -127,14 +226,16 @@ def format_size(bytes_size: Optional[int]) -> str:
 
 def get_ffmpeg_path(save_path: str) -> Optional[str]:
     """
-    获取 FFmpeg 可执行文件路径
+    获取 FFmpeg 可执行文件路径 - 改进版本
     
-    使用跨平台FFmpeg管理器，按优先级查找FFmpeg：
-    1. 系统安装的FFmpeg
-    2. Python原生库（ffmpeg-python, moviepy）
-    3. 打包后的可执行文件
-    4. resources目录中的FFmpeg
-    5. 保存路径中的FFmpeg
+    使用跨平台FFmpeg集成器，按优先级查找FFmpeg：
+    1. FFmpeg集成器（嵌入式FFmpeg）
+    2. 系统安装的FFmpeg
+    3. Python原生库（ffmpeg-python, moviepy）
+    4. 打包后的可执行文件
+    5. resources目录中的FFmpeg
+    6. 保存路径中的FFmpeg
+    7. 环境变量PATH中的FFmpeg
     
     Args:
         save_path: 保存路径
@@ -143,55 +244,144 @@ def get_ffmpeg_path(save_path: str) -> Optional[str]:
         Optional[str]: FFmpeg路径，如果未找到则返回None
     """
     try:
-        # 导入FFmpeg管理器
-        from ..core.ffmpeg_manager import ffmpeg_manager
+        # 优先级1: 尝试使用FFmpeg集成器
+        try:
+            from ..core.ffmpeg_integrator import ffmpeg_integrator
+            if ffmpeg_integrator.is_available():
+                ffmpeg_path = ffmpeg_integrator.get_ffmpeg_path()
+                if ffmpeg_path and _verify_ffmpeg_executable(ffmpeg_path):
+                    logger.info(f"使用FFmpeg集成器: {ffmpeg_path}")
+                    return ffmpeg_path
+        except ImportError:
+            logger.info("FFmpeg集成器不可用，尝试其他方法")
+        except Exception as e:
+            logger.warning(f"FFmpeg集成器检查失败: {e}")
         
-        # 如果系统FFmpeg可用，返回路径
-        if ffmpeg_manager.is_available() and ffmpeg_manager.get_method() == "system":
-            return ffmpeg_manager.get_ffmpeg_path()
+        # 优先级2: 导入FFmpeg管理器
+        try:
+            from ..core.ffmpeg_manager import ffmpeg_manager
+            
+            # 如果系统FFmpeg可用，返回路径
+            if ffmpeg_manager.is_available() and ffmpeg_manager.get_method() == "system":
+                ffmpeg_path = ffmpeg_manager.get_ffmpeg_path()
+                if ffmpeg_path and _verify_ffmpeg_executable(ffmpeg_path):
+                    return ffmpeg_path
+            
+            # 如果Python库可用，返回包装器路径
+            if ffmpeg_manager.is_available() and ffmpeg_manager.get_method() in ["python", "moviepy"]:
+                ffmpeg_path = ffmpeg_manager.get_ffmpeg_path()
+                if ffmpeg_path:
+                    return ffmpeg_path
+        except ImportError:
+            logger.info("FFmpeg管理器不可用，使用传统检测方法")
+        except Exception as e:
+            logger.warning(f"FFmpeg管理器检查失败: {e}")
         
-        # 如果Python库可用，返回包装器路径
-        if ffmpeg_manager.is_available() and ffmpeg_manager.get_method() in ["python", "moviepy"]:
-            return ffmpeg_manager.get_ffmpeg_path()
+        # 优先级3: 使用shutil.which查找系统PATH中的FFmpeg
+        try:
+            import shutil
+            ffmpeg_path = shutil.which("ffmpeg")
+            if ffmpeg_path and _verify_ffmpeg_executable(ffmpeg_path):
+                logger.info(f"在系统PATH中找到FFmpeg: {ffmpeg_path}")
+                return ffmpeg_path
+        except Exception as e:
+            logger.warning(f"系统PATH查找失败: {e}")
         
-        # 回退到传统检测方法
+        # 优先级4: 回退到传统检测方法
         if getattr(sys, "frozen", False):
             ffmpeg_exe = os.path.join(sys._MEIPASS, "ffmpeg.exe")
-            if os.path.exists(ffmpeg_exe):
+            if os.path.exists(ffmpeg_exe) and _verify_ffmpeg_executable(ffmpeg_exe):
                 return ffmpeg_exe
         
-        # 检查resources目录中是否有FFmpeg
+        # 优先级5: 检查resources目录中是否有FFmpeg
         resources_ffmpeg = os.path.join("resources", "ffmpeg.exe")
-        if os.path.exists(resources_ffmpeg):
+        if os.path.exists(resources_ffmpeg) and _verify_ffmpeg_executable(resources_ffmpeg):
             return resources_ffmpeg
+        
+        # 优先级5.5: 检查resources/ffmpeg/bin目录中是否有FFmpeg
+        resources_bin_ffmpeg = os.path.join("resources", "ffmpeg", "bin", "ffmpeg.exe")
+        if os.path.exists(resources_bin_ffmpeg) and _verify_ffmpeg_executable(resources_bin_ffmpeg):
+            logger.info(f"在resources/ffmpeg/bin中找到FFmpeg: {resources_bin_ffmpeg}")
+            return resources_bin_ffmpeg
                 
-        # 检查保存路径中是否有FFmpeg
+        # 优先级6: 检查保存路径中是否有FFmpeg
         ffmpeg_path = os.path.join(save_path, "ffmpeg.exe")
-        if os.path.exists(ffmpeg_path):
+        if os.path.exists(ffmpeg_path) and _verify_ffmpeg_executable(ffmpeg_path):
             return ffmpeg_path
+            
+        # 优先级7: 检查当前工作目录
+        current_ffmpeg = os.path.join(os.getcwd(), "ffmpeg.exe")
+        if os.path.exists(current_ffmpeg) and _verify_ffmpeg_executable(current_ffmpeg):
+            return current_ffmpeg
             
         logger.warning("FFmpeg 未找到")
         return None
         
-    except ImportError:
+    except Exception as e:
+        logger.error(f"获取FFmpeg路径时发生错误: {e}")
+        
         # 如果FFmpeg管理器不可用，使用传统方法
         if getattr(sys, "frozen", False):
             ffmpeg_exe = os.path.join(sys._MEIPASS, "ffmpeg.exe")
-            if os.path.exists(ffmpeg_exe):
+            if os.path.exists(ffmpeg_exe) and _verify_ffmpeg_executable(ffmpeg_exe):
                 return ffmpeg_exe
         
         # 检查resources目录中是否有FFmpeg
         resources_ffmpeg = os.path.join("resources", "ffmpeg.exe")
-        if os.path.exists(resources_ffmpeg):
+        if os.path.exists(resources_ffmpeg) and _verify_ffmpeg_executable(resources_ffmpeg):
             return resources_ffmpeg
+        
+        # 检查resources/ffmpeg/bin目录中是否有FFmpeg
+        resources_bin_ffmpeg = os.path.join("resources", "ffmpeg", "bin", "ffmpeg.exe")
+        if os.path.exists(resources_bin_ffmpeg) and _verify_ffmpeg_executable(resources_bin_ffmpeg):
+            logger.info(f"在resources/ffmpeg/bin中找到FFmpeg: {resources_bin_ffmpeg}")
+            return resources_bin_ffmpeg
                 
         # 检查保存路径中是否有FFmpeg
         ffmpeg_path = os.path.join(save_path, "ffmpeg.exe")
-        if os.path.exists(ffmpeg_path):
+        if os.path.exists(ffmpeg_path) and _verify_ffmpeg_executable(ffmpeg_path):
             return ffmpeg_path
             
         logger.warning("FFmpeg 未找到")
         return None
+
+
+def _verify_ffmpeg_executable(ffmpeg_path: str) -> bool:
+    """
+    验证FFmpeg可执行文件 - 内部辅助函数
+    
+    Args:
+        ffmpeg_path: FFmpeg路径
+        
+    Returns:
+        bool: 是否可用
+    """
+    try:
+        # 检查文件是否存在
+        if not os.path.exists(ffmpeg_path):
+            return False
+        
+        # 在非Windows系统上检查可执行权限
+        if platform.system().lower() != "windows":
+            if not os.access(ffmpeg_path, os.X_OK):
+                logger.warning(f"文件没有执行权限: {ffmpeg_path}")
+                return False
+        
+        # 尝试运行FFmpeg获取版本信息（使用更短的超时时间）
+        result = subprocess.run(
+            [ffmpeg_path, '-version'],
+            capture_output=True,
+            text=True,
+            timeout=5  # 减少超时时间
+        )
+        return result.returncode == 0
+        
+    except subprocess.TimeoutExpired:
+        logger.warning(f"FFmpeg版本检查超时: {ffmpeg_path}")
+        return False
+    except Exception as e:
+        logger.warning(f"验证FFmpeg可执行文件失败: {e}")
+        return False
 
 
 def check_ffmpeg(ffmpeg_path: Optional[str], parent_widget=None) -> bool:

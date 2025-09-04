@@ -14,7 +14,7 @@
 - 日志记录和错误处理
 
 作者: 椰果IDM开发团队
-版本: 1.0.6
+版本: 1.5.0
 """
 
 import sys
@@ -24,6 +24,8 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from PyQt5.QtWidgets import QApplication
+from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import Qt
 from src.ui.main_window import VideoDownloader
 from src.utils.logger import logger
 from src.core.log_manager import log_manager
@@ -47,11 +49,31 @@ def main() -> None:
         
         # 设置应用程序信息
         app.setApplicationName("椰果IDM")
-        app.setApplicationVersion("1.0.6")
+        app.setApplicationVersion("1.5.0")
         app.setOrganizationName("椰果IDM开发团队")
+        
+        # 设置应用程序图标 - 确保系统任务栏显示正确图标
+        icon_path = os.path.join(os.path.dirname(__file__), "resources", "logo.ico")
+        if os.path.exists(icon_path):
+            app_icon = QIcon(icon_path)
+            app.setWindowIcon(app_icon)
+            # 在Windows上，确保任务栏图标正确设置
+            if hasattr(app, 'setWindowIcon'):
+                app.setWindowIcon(app_icon)
+            logger.info(f"应用程序图标已设置: {icon_path}")
+        else:
+            logger.warning(f"图标文件未找到: {icon_path}")
         
         # 创建主窗口
         window = VideoDownloader()
+        
+        # 确保主窗口也使用相同的图标
+        if os.path.exists(icon_path):
+            window.setWindowIcon(QIcon(icon_path))
+            # 在Windows上，设置任务栏图标
+            if hasattr(window, 'setWindowIcon'):
+                window.setWindowIcon(QIcon(icon_path))
+        
         window.show()
         
         # 启动应用程序事件循环
